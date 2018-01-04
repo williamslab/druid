@@ -57,6 +57,9 @@ def getRelationship(tmp_graph,ind1,ind2):
                         elif type2 == '-1':
                             total = total + 2
                         i = i + 2
+                    else:
+                        total = -1
+                        i = len(path) + 1
 
                 if total != 0 and total != -1:
                     return total

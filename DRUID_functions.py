@@ -271,11 +271,12 @@ def inferSecondPath(rel_graph,all_rel, inds, file_for_segments, force, outfile, 
                         sib2.append(i2)
                         for s1 in sib1:
                             for s2 in sib2:
-                                if not rel_graph.has_edge(s1,s2):
-                                    rel_graph.add_edge(s1, s2)
-                                    rel_graph.add_edge(s2, s1)
-                                rel_graph[s1][s2]['type'] = '1U'
-                                rel_graph[s2][s1]['type'] = '1U'
+                                if not rel_graph.get_edge_data(s1,s2)['type'] == 'FS':
+                                    if not rel_graph.has_edge(s1,s2):
+                                        rel_graph.add_edge(s1, s2)
+                                        rel_graph.add_edge(s2, s1)
+                                    rel_graph[s1][s2]['type'] = '1U'
+                                    rel_graph[s2][s1]['type'] = '1U'
                     else: #if IBD2 is too high, label as DC so we don't use
                         rel_graph.add_edge(i1,i2)
                         rel_graph.add_edge(i2,i1)
@@ -1720,6 +1721,7 @@ def runDRUID(rel_graph, all_rel, inds, args):
     checked = []
     for [ind1,ind2] in itertools.combinations(inds,2): #test each pair of individuals
         if not [ind1,ind2] in checked and not [ind2,ind1] in checked: #if pair not yet tested
+            print("Comparing "+ind1+" and "+ind2+"\n")
             results = []
             if rel_graph.has_edge(ind1, ind2):
                 checked.append([ind1,ind2])
@@ -1826,6 +1828,8 @@ def runDRUID(rel_graph, all_rel, inds, args):
                                 closest_result = res
                                 break
                         total = closest_result[2]
+
+
                         for ii in range(len(moves1)-1,-1,-1):
                             if moves1[ii] in ['P','C']:
                                 total = total + 1
@@ -1836,6 +1840,15 @@ def runDRUID(rel_graph, all_rel, inds, args):
                             else:
                                 refined = all_rel[ind2][moves_inds1[ii]][3]
                             results.append([moves_inds1[ii],ind2,total,refined])
+                            #check for close relatives of moves_inds[ii]
+                            [sib1, avunc1_bothsides, nn1, par1, child1, gp1, halfsib1_sets, twins1] = pullFamily(rel_graph, moves_inds1[ii])
+                            for s1 in sib1:
+                                results.append([s1,ind2,total,refined])
+                            sib1.append(moves_inds1[ii])
+                            hs1 = checkUseHalfsibs(sib1, halfsib1_sets, ind2, all_rel)
+                            for h1 in hs1:
+                                results.append([h1,ind2,total,refined])
+
                         total = closest_result[2]
                         for ii in range(len(moves2)-1,-1,-1):
                             if moves2[ii] in ['P','C']:
@@ -1847,6 +1860,15 @@ def runDRUID(rel_graph, all_rel, inds, args):
                             else:
                                 refined = all_rel[ind1][moves_inds2[ii]][3]
                             results.append([ind1,moves_inds2[ii],total,refined])
+                            #check for close relatives of moves_inds[ii]
+                            [sib2, avunc2_bothsides, nn2, par2, child2, gp2, halfsib2_sets, twins2] = pullFamily(rel_graph, moves_inds2[ii])
+                            for s2 in sib2:
+                                results.append([ind1,s2,total,refined])
+                            sib2.append(moves_inds2[ii])
+                            hs2 = checkUseHalfsibs(sib2, halfsib2_sets, ind1, all_rel)
+                            for h2 in hs2:
+                                results.append([ind1,h2,total,refined])
+
                         if len(moves1) and len(moves2):
                             total = closest_result[2]
                             for i1 in range(len(moves1)-1,-1,-1):
@@ -1864,6 +1886,26 @@ def runDRUID(rel_graph, all_rel, inds, args):
                                     else:
                                         refined = all_rel[moves_inds2[i2]][moves_inds1[i1]][3]
                                     results.append([moves_inds1[i1],moves_inds2[i2],total,refined])
+
+                                    # check for close relatives of moves_inds[ii]
+                                    [sib1, avunc1_bothsides, nn1, par1, child1, gp1, halfsib1_sets, twins1] = pullFamily(rel_graph, moves_inds[i1])
+                                    [sib2, avunc2_bothsides, nn2, par2, child2, gp2, halfsib2_sets, twins2] = pullFamily(rel_graph, moves_inds2[i2])
+                                    for s1 in sib1:
+                                        results.append([s1, moves_inds2[i2], total, refined])
+                                    for s2 in sib2:
+                                        results.append([moves_inds1[i1], s2, total, refined])
+                                        for s1 in sib1:
+                                            results.append([s1, s2, total, refined])
+                                    sib1.append(moves_inds[i1])
+                                    sib2.append(moves_inds[i2])
+                                    hs1 = checkUseHalfsibs(sib1, halfsib1_sets, ind2, all_rel)
+                                    hs2 = checkUseHalfsibs(sib2, halfsib2_sets, ind1, all_rel)
+                                    for h1 in hs1:
+                                        results.append([h1, ind2, total, refined])
+                                    for h2 in hs2:
+                                        results.append([ind1, h2, total, refined])
+                                        for h1 in hs1:
+                                            results.append([h1,h2,total,refined])
 
                 if len(twins1):
                     for res in results:
