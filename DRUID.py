@@ -79,7 +79,8 @@ all_results = runDRUID(rel_graph, all_rel, inds, args)
 
 
 outfile_results = open(args.o[0]+'.DRUID','w')
-outfile_results.write("ind1\tind2\tDRUID\tRefinedIBD\n") 
+outfile_results.write("ind1\tind2\tDRUID\tRefinedIBD\n")
+for res in all_results:
     if res[2] == '1U':
         res[2] = '1'
     outfile_results.write("\t".join(map(str,res))+'\n')

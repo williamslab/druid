@@ -12,7 +12,7 @@ import numpy as np
 
 def getRelationship(tmp_graph,ind1,ind2):
     #if ind1 anad ind2 have a path between them, we find their degree of relatedness/relationship type
-    if nx.has_path(tmp_graph, ind1, ind2):
+    if ind1 in tmp_graph.nodes() and ind2 in tmp_graph.nodes() and nx.has_path(tmp_graph, ind1, ind2):
         #check all paths because some shortest paths may try to travel through the other lineage
         paths = nx.all_shortest_paths(tmp_graph,ind1,ind2)
         for path in paths:
@@ -33,6 +33,9 @@ def getRelationship(tmp_graph,ind1,ind2):
                     if (type1 == 'P' and type2 == 'C') or (type1 == 'GP' and type2 == 'GC') or (type1 == 'P' and type2 == 'GC') or (type1 == 'GP' and type2 == 'C') or (type1 == 'C' and type2 == 'P') or (type1 == 'GC' and type2 == 'GP') or (type1 == 'C' and type2 == 'GP') or (type1 == 'GC' and type2 == 'P') or (type1 == 'C' and type2 == 'AU') or (type1 == 'GC' and type2 == 'AU') or (type1 == 'P' and type2 == 'NN') or (type1 == 'GP' and type2 == 'NN'): #traveling to other lineage, stop
                         total = -1
                         i = len(path) + 1
+                    elif (type1 == 'AU' and type2 == 'C'):
+                        total = -1
+                        i = len(path) + 1
                     elif type1 in ['2','1U','HS'] or type2 in ['2','1U']:
                         total = -1
                         i = len(path) + 1
@@ -43,6 +46,13 @@ def getRelationship(tmp_graph,ind1,ind2):
                         if type2 == 'P' or type2 == 'GP': #traveling to other lineage, stop
                             total = -1
                             i = len(path) + 1
+                        elif type2 == 'AU' or type2 == 'NN':
+                            total = total + 3
+                            i = i + 2
+                        else:
+                            total = -1
+                            i = len(path) + 1
+
 
 
                     elif type1 == 'AU':
@@ -168,6 +178,60 @@ def checkSiblingSubgraph(tmp_graph,siblings):
                     all_sibs.append(x)
         counts = [all_sibs.count(x) for x in all_sibs]
     return [list(set(all_sibs)), remove]
+
+def anyIn(list1,list2):
+    return [x for x in list1 if x in list2]
+
+def checkForMoveUp(all_rel, ind, sibset, older_gen, third_party):
+    #check if parent/grandparent is in dataset and is more related to third_party
+    if len(older_gen):
+        if anyIn(older_gen,third_party):
+            return 'same'
+        else:
+            all_sib = []
+            for sib in sibset:
+                for tp in third_party:
+                    if sib < tp:
+                        all_sib.append(float(all_rel[sib][tp][2]))
+                    else:
+                        all_sib.append(float(all_rel[tp][sib][2]))
+            maxsib = max(all_sib)
+
+            maxpar = []
+            for par in older_gen:
+                all_par = []
+                for tp in third_party:
+                    if par < tp:
+                        all_par.append(float(all_rel[par][tp][2]))
+                    else:
+                        all_par.append(float(all_rel[tp][par][2]))
+                maxpar.append(max(all_par))
+
+
+
+        if max(maxpar) > maxsib:
+            par_use = older_gen[maxpar.index(max(maxpar))]
+            return par_use
+        else:
+            return ind
+    else:
+        return ind
+
+
+
+def checkAuntUncleGPRelationships(tmp_graph,siblings,par):
+    # ensure the siblings of 'par' are listed as aunts/uncles of 'siblings' (par = parent of siblings)
+    if par!= []:
+        [sibpar, avunc_bothsides, nn, parpar, childpar, gppar, halfsib_sets, twins] = pullFamily(tmp_graph, par)
+        for sib in siblings:
+            for sp in sibpar:
+                tmp_graph.get_edge_data(sib,sp)['type'] = 'NN'
+                tmp_graph.get_edge_data(sp,sib)['type'] = 'AU'
+        if parpar != []:
+            for sib in siblings:
+                for pp in parpar:
+                    tmp_graph.get_edge_data(sib, pp)['type'] = 'GC'
+                    tmp_graph.get_edge_data(pp, sib)['type'] = 'GP'
 
 
 def getAuntsUnclesFromGraph(tmp_graph,ind):

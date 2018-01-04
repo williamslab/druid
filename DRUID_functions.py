@@ -337,38 +337,13 @@ def inferSecondPath(rel_graph,all_rel, inds, file_for_segments, force, outfile, 
             for sib in sibs:
                 checked.append(sib)
 
-
-def checkForMoveUp(ind, sibset, older_gen, third_party):
-    #check if parent/grandparent is in dataset and is more related to third_party
-    if len(older_gen):
-        all_sib = []
-        for sib in sibset:
-            for tp in third_party:
-                if sib < tp:
-                    all_sib.append(float(all_rel[sib][tp][2]))
-                else:
-                    all_sib.append(float(all_rel[tp][sib][2]))
-        maxsib = max(all_sib)
-
-        maxpar = []
-        for par in older_gen:
-            all_par = []
-            for tp in third_party:
-                if par < tp:
-                    all_par.append(float(all_rel[par][tp][2]))
-                else:
-                    all_par.append(float(all_rel[tp][par][2]))
-            maxpar.append(max(all_par))
-
-
-
-        if max(maxpar) > maxsib:
-            par_use = older_gen[maxpar.index(max(maxpar))]
-            return par_use
-        else:
-            return ind
-    else:
-        return ind
+    checked = []
+    for node in rel_graph.nodes():
+        if not node in checked:
+            [siblings, avunc_bothsides, nn, par, child, gp, halfsib_sets, twins] = pullFamily(rel_graph, node)
+            siblings.append(node)
+            checkAuntUncleGPRelationships(rel_graph, siblings, par)
+            checked = checked + siblings
 
 
 
@@ -1734,6 +1709,7 @@ def runDRUID(rel_graph, all_rel, inds, args):
                     type = '1'
                 results = results + [[ind1, ind2, type, refined]]
             else:
+                print(ind1+" and "+ind2+'\n')
                 [sib1, avunc1_bothsides, nn1, par1, child1, gp1, halfsib1_sets, twins1] = pullFamily(rel_graph, ind1)
                 [sib2, avunc2_bothsides, nn2, par2, child2, gp2, halfsib2_sets, twins2] = pullFamily(rel_graph, ind2)
                 sib1.append(ind1)
@@ -1748,88 +1724,95 @@ def runDRUID(rel_graph, all_rel, inds, args):
                         refined = all_rel[ind1][ind2][3]
                     else:
                         refined = all_rel[ind2][ind1][3]
-                    results = results + [ind1,ind2,reltype,refined]
+                    results = results + [[ind1,ind2,reltype,refined]]
                 else: #no path between individuals
                     #check if ind1 has parents/grandparents more closely related to other set of individuals
                     ind1_original = ind1
-                    ind1_new = checkForMoveUp(ind1, sib1, par1+gp1, sib2)
+                    ind1_new = checkForMoveUp(all_rel,ind1, sib1, par1+gp1, sib2)
                     moves1 = []
                     moves_inds1 = []
-                    while ind1 != ind1_new:
+                    while ind1 != ind1_new and ind1_new != 'same':
                         moves1.append(getRelationship(rel_graph,ind1_new, ind1))
                         moves_inds1.append(ind1)
                         ind1 = ind1_new
                         [sib1, avunc1_bothsides, nn1, par1, child1, gp1, halfsib1_sets, twins1] = pullFamily(rel_graph, ind1)
                         sib1.append(ind1)
-                        ind1_new = checkForMoveUp(ind1, sib1, par1+gp1, sib2)
+                        ind1_new = checkForMoveUp(all_rel,ind1, sib1, gp1+par1, sib2)
 
-                    ind1 = ind1_new
+                    if ind1_new == 'same':
+                        ind1 = anyIn(gp1 + par1, sib2)[0]
+                        [sib1, avunc1_bothsides, nn1, par1, child1, gp1, halfsib1_sets, twins1] = pullFamily(rel_graph, ind1)
+                    else:
+                        # check if ind2 has parents/grandparentsmore closely related to other set of individuals
+                        ind2_original = ind2
+                        ind2_new = checkForMoveUp(all_rel,ind2,sib2,gp2+par2,sib1)
 
-                    # check if ind2 has parents/grandparentsmore closely related to other set of individuals
-                    ind2_original = ind2
-                    ind2_new = checkForMoveUp(ind2,sib2,par2+gp2,sib1)
-                    moves2 = []
-                    moves_inds2 = []
-                    while ind2 != ind2_new:
-                        moves2.append(getRelationship(rel_graph, ind2_new, ind2))
-                        moves_inds2.append(ind2)
-                        ind2 = ind2_new
-                        [sib2, avunc2_bothsides, nn2, par2, child2, gp2, halfsib2_sets, twins2] = pullFamily(rel_graph, ind2)
-                        sib2.append(ind2)
-                        ind2_new = checkForMoveUp(ind2, sib2, par2+gp2, sib1)
+                        moves2 = []
+                        moves_inds2 = []
+                        while ind2 != ind2_new and ind2_new != 'same':
+                            moves2.append(getRelationship(rel_graph, ind2_new, ind2))
+                            moves_inds2.append(ind2)
+                            ind2 = ind2_new
+                            [sib2, avunc2_bothsides, nn2, par2, child2, gp2, halfsib2_sets, twins2] = pullFamily(rel_graph, ind2)
+                            sib2.append(ind2)
+                            ind2_new = checkForMoveUp(all_rel,ind2, sib2, gp2+par2, sib1)
 
-                    ind2 = ind2_new
+                        if ind2_new == 'same':
+                            ind2 = anyIn(gp2 + par2, sib1)[0]
+                            [sib2, avunc2_bothsides, nn2, par2, child2, gp2, halfsib2_sets, twins2] = pullFamily(rel_graph, ind2)
 
                     # ind1 and ind2 can't be related via graph, otherwise they'd be considered above
                     # continue onto composite relatedness method
 
                     #switch focus to youngest generation if available
-                    if not len(avunc1_bothsides) and len(nn1):
-                        tmp = sib1[:]
-                        sib1 = nn1[:]
-                        avunc1_bothsides = [tmp[:]]
-                    if not len(avunc2_bothsides) and len(nn2):
-                        tmp = sib2[:]
-                        sib2 = nn2[:]
-                        avunc2_bothsides = [tmp[:]]
-                    # add these sibsets to checked
-                    for i1 in sib1:
-                        for i2 in sib2:
-                            checked.append([i1,i2])
-                            checked.append([i2,i1])
+                    if ind1_new != 'same' and ind2_new != 'same':
+                        if not len(avunc1_bothsides) and len(nn1):
+                            tmp = sib1[:]
+                            sib1 = nn1[:]
+                            avunc1_bothsides = [tmp[:]]
+                        if not len(avunc2_bothsides) and len(nn2):
+                            tmp = sib2[:]
+                            sib2 = nn2[:]
+                            avunc2_bothsides = [tmp[:]]
+                        # add these sibsets to checked
+                        for i1 in sib1:
+                            for i2 in sib2:
+                                checked.append([i1,i2])
+                                checked.append([i2,i1])
 
 
-                    if len(avunc1_bothsides) or len(avunc2_bothsides):
-                        all_avunc1 = []
-                        all_avunc2 = []
-                        for i in range(0, len(avunc1_bothsides)):
-                            all_avunc1 = all_avunc1 + avunc1_bothsides[i]
-                        for i in range(0, len(avunc2_bothsides)):
-                            all_avunc2 = all_avunc2 + avunc2_bothsides[i]
-                        [relavunc1, relavunc2, unused1, unused2] = checkRelevantAuntsUncles(sib1, sib2, avunc1_bothsides, avunc2_bothsides, par1, par2)
-                    else:
-                        relavunc1 = []
-                        relavunc2 = []
-                    for av1 in relavunc1:
+                        if len(avunc1_bothsides) or len(avunc2_bothsides):
+                            [relavunc1, relavunc2, unused1, unused2] = checkRelevantAuntsUncles(sib1, sib2, avunc1_bothsides, avunc2_bothsides, par1, par2)
+                        else:
+                            relavunc1 = []
+                            relavunc2 = []
+                        for av1 in relavunc1:
+                            for av2 in relavunc2:
+                                checked.append([av1,av2])
+                                checked.append([av2,av1])
+                            for s2 in sib2:
+                                checked.append([av1,s2])
+                                checked.append([s2,av1])
                         for av2 in relavunc2:
-                            checked.append([av1,av2])
-                            checked.append([av2,av1])
-                        for s2 in sib2:
-                            checked.append([av1,s2])
-                            checked.append([s2,av1])
-                    for av2 in relavunc2:
-                        for s1 in sib1:
-                            checked.append([av2,s1])
-                            checked.append([s1,av2])
-                    results = combineBothGPsKeepProportionOnlyExpectation_final(sib1, relavunc1, sib2, relavunc2, -1, -1, args.s[0], args.i[0], rel_graph)
+                            for s1 in sib1:
+                                checked.append([av2,s1])
+                                checked.append([s1,av2])
+                        results = combineBothGPsKeepProportionOnlyExpectation_final(sib1, relavunc1, sib2, relavunc2, -1, -1, args.s[0], args.i[0], rel_graph)
+                        if ind1_original != ind1 or ind2_original != ind2:
+                            for res in results:
+                                if (res[0] == ind1 and res[1] == ind2) or (res[0] == ind2 and res[1] == ind1):
+                                    closest_result = res
+                                    break
+                            if closest_result[2] == '1U':
+                                closest_result[2] = 1
+                            total = int(closest_result[2])
+                    if (ind1_new == 'same' or ind2_new == 'same'):
+                        if ind1 == ind2:
+                            closest_result = [ind1,ind2,0]
+                        else: #siblings
+                            closest_result = [ind1,ind2,1]
+
                     if ind1_original != ind1 or ind2_original != ind2:
-                        for res in results:
-                            if (res[0] == ind1 and res[1] == ind2) or (res[0] == ind2 and res[1] == ind1):
-                                closest_result = res
-                                break
-                        total = closest_result[2]
-
-
                         for ii in range(len(moves1)-1,-1,-1):
                             if moves1[ii] in ['P','C']:
                                 total = total + 1
@@ -1849,7 +1832,7 @@ def runDRUID(rel_graph, all_rel, inds, args):
                             for h1 in hs1:
                                 results.append([h1,ind2,total,refined])
 
-                        total = closest_result[2]
+                        total = int(closest_result[2])
                         for ii in range(len(moves2)-1,-1,-1):
                             if moves2[ii] in ['P','C']:
                                 total = total + 1
@@ -1870,7 +1853,7 @@ def runDRUID(rel_graph, all_rel, inds, args):
                                 results.append([ind1,h2,total,refined])
 
                         if len(moves1) and len(moves2):
-                            total = closest_result[2]
+                            total = int(closest_result[2])
                             for i1 in range(len(moves1)-1,-1,-1):
                                 if moves1[i1] in ['P', 'C']:
                                     total = total + 1
@@ -1888,7 +1871,7 @@ def runDRUID(rel_graph, all_rel, inds, args):
                                     results.append([moves_inds1[i1],moves_inds2[i2],total,refined])
 
                                     # check for close relatives of moves_inds[ii]
-                                    [sib1, avunc1_bothsides, nn1, par1, child1, gp1, halfsib1_sets, twins1] = pullFamily(rel_graph, moves_inds[i1])
+                                    [sib1, avunc1_bothsides, nn1, par1, child1, gp1, halfsib1_sets, twins1] = pullFamily(rel_graph, moves_inds1[i1])
                                     [sib2, avunc2_bothsides, nn2, par2, child2, gp2, halfsib2_sets, twins2] = pullFamily(rel_graph, moves_inds2[i2])
                                     for s1 in sib1:
                                         results.append([s1, moves_inds2[i2], total, refined])
@@ -1896,8 +1879,8 @@ def runDRUID(rel_graph, all_rel, inds, args):
                                         results.append([moves_inds1[i1], s2, total, refined])
                                         for s1 in sib1:
                                             results.append([s1, s2, total, refined])
-                                    sib1.append(moves_inds[i1])
-                                    sib2.append(moves_inds[i2])
+                                    sib1.append(moves_inds1[i1])
+                                    sib2.append(moves_inds2[i2])
                                     hs1 = checkUseHalfsibs(sib1, halfsib1_sets, ind2, all_rel)
                                     hs2 = checkUseHalfsibs(sib2, halfsib2_sets, ind1, all_rel)
                                     for h1 in hs1:
@@ -1914,7 +1897,7 @@ def runDRUID(rel_graph, all_rel, inds, args):
                                 results.append([t1,res[1],res[2],res[3]])
                         elif sibs1[0] == res[1]:
                             for t1 in twins1:
-                                results.append(res[0],t1,res[2],res[3])
+                                results.append([res[0],t1,res[2],res[3]])
 
                 if len(twins2):
                     for res in results:
@@ -1923,7 +1906,7 @@ def runDRUID(rel_graph, all_rel, inds, args):
                                 results.append([t2, res[1], res[2], res[3]])
                         elif sibs2[0] == res[1]:
                             for t2 in twins2:
-                                results.append(res[0], t2, res[2], res[3])
+                                results.append([res[0], t2, res[2], res[3]])
 
             all_results = all_results + results
 
