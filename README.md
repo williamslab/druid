@@ -23,8 +23,11 @@ DRUID requires as input pairwise IBD segment information. Although one could use
 
 We have a script to merge IBD information from the three separate Refined IBD runs and extract pairwise IBD1/2 information as well as pairwise IBD1/2 segment information. This script is available at: 
 https://github.com/MonicaRamstetter/bakeoff. 
+
 To obtain the files necessary for running DRUID, one should run the getIBD.py script as follows:
+
 python getIBD.py -f [file1.ibd] [file2.ibd] [file3.ibd] -m [mapfile.map] -t 1 -s 1 -o [output_prefix]
+
 where file1.ibd, file2.ibd, and file3.ibd are the three .ibd files output by Refined IBD, mapfile.map is a PLINK formatted map file containing genetic position information and corresponding to the VCF file input to Refined IBD, '-t 1' ensures pairwise proportions of genome shared IBD are output, and '-s 1' ensures segment information is output.
 
 
