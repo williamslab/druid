@@ -8,7 +8,19 @@ import random
 import copy
 import numpy as np
 
-
+def checkChangeLineage(tmp_graph,path):
+    if len(path) > 2:
+        for i in range(0,len(path)-2):
+            indfirst = path[i]
+            indsecond = path[i+1]
+            indthird = path[i+2]
+            type1 = tmp_graph.get_edge_data(indfirst, indsecond)['type']
+            type2 = tmp_graph.get_edge_data(indsecond, indthird)['type']
+            if (type1 == 'P' and type2 == 'C') or (type1 == 'GP' and type2 == 'GC') or (type1 == 'P' and type2 == 'GC') or (type1 == 'GP' and type2 == 'C') or (type1 == 'C' and type2 == 'P') or (type1 == 'GC' and type2 == 'GP') or (type1 == 'C' and type2 == 'GP') or (type1 == 'GC' and type2 == 'P') or (type1 == 'C' and type2 == 'AU') or (type1 == 'GC' and type2 == 'AU') or (type1 == 'P' and type2 == 'NN') or (type1 == 'GP' and type2 == 'NN'):
+                return 1
+        return 0
+    else:
+        return 0
 
 def getRelationship(tmp_graph,ind1,ind2):
     #if ind1 anad ind2 have a path between them, we find their degree of relatedness/relationship type
@@ -18,7 +30,7 @@ def getRelationship(tmp_graph,ind1,ind2):
         for path in paths:
             if len(path) == 2: #path only involves those two individuals
                 return tmp_graph.get_edge_data(ind1,ind2)['type']
-            elif len(path) > 2:
+            elif len(path) > 2 and not checkChangeLineage(tmp_graph,path):
                 total = 0 #degree of relatedness
                 i = 2
                 while i <= len(path):
@@ -43,6 +55,10 @@ def getRelationship(tmp_graph,ind1,ind2):
                         total = total + 1
                         i = i + 1
                     elif type1 == 'NN':
+                        if i == len(path) - 1:
+                            if type2 == 'GP':
+                                total = total + 4
+                                i = i + 2
                         if type2 == 'P' or type2 == 'GP': #traveling to other lineage, stop
                             total = -1
                             i = len(path) + 1
@@ -52,9 +68,6 @@ def getRelationship(tmp_graph,ind1,ind2):
                         else:
                             total = -1
                             i = len(path) + 1
-
-
-
                     elif type1 == 'AU':
                         if type2 == 'P': #grandparent
                             total = total + 1
@@ -62,10 +75,12 @@ def getRelationship(tmp_graph,ind1,ind2):
                             total = total + 2
                         elif type2 in ['GC','HS','DC']: #cousins once removed, half-aunt/uncle, or complex
                             total = total + 3
-                        elif type2 == 'NN': #niece/nephew of aunt/uncle = cousin
+                        elif type2 == 'NN': #great-aunt/uncle
                             total = total + 3
                         elif type2 == '-1':
-                            total = total + 2
+                            total = total + 3
+                        elif type2 == 'AU': #cousin
+                            total = total + 3
                         i = i + 2
                     else:
                         total = -1
@@ -73,11 +88,24 @@ def getRelationship(tmp_graph,ind1,ind2):
 
                 if total != 0 and total != -1:
                     return total
-
         return -1
 
     else:
         return -1
+
+def getLargestSibsets(tmp_graph,all_inds):
+    sibsets = []
+    checked = []
+    for ind in all_inds:
+        if not ind in checked:
+            [sib, avunc_bothsides, nn, par, child, gp, halfsib_sets, twins] = pullFamily(tmp_graph, ind)
+            sib.append(ind)
+            checked = checked + sib
+            sibsets.append(sib)
+
+    sizes = [len(x) for x in sibsets]
+    return sibsets[sizes.index(max(sizes))]
+
 
 
 def checkIfSib(tmp_graph,ind1,ind2):
@@ -222,16 +250,23 @@ def checkForMoveUp(all_rel, ind, sibset, older_gen, third_party):
 def checkAuntUncleGPRelationships(tmp_graph,siblings,par):
     # ensure the siblings of 'par' are listed as aunts/uncles of 'siblings' (par = parent of siblings)
     if par!= []:
-        [sibpar, avunc_bothsides, nn, parpar, childpar, gppar, halfsib_sets, twins] = pullFamily(tmp_graph, par)
-        for sib in siblings:
-            for sp in sibpar:
-                tmp_graph.get_edge_data(sib,sp)['type'] = 'NN'
-                tmp_graph.get_edge_data(sp,sib)['type'] = 'AU'
-        if parpar != []:
+        for p in par:
+            [sibpar, avunc_bothsides, nn, parpar, childpar, gppar, halfsib_sets, twins] = pullFamily(tmp_graph, p)
             for sib in siblings:
-                for pp in parpar:
-                    tmp_graph.get_edge_data(sib, pp)['type'] = 'GC'
-                    tmp_graph.get_edge_data(pp, sib)['type'] = 'GP'
+                for sp in sibpar:
+                    if not tmp_graph.has_edge(sib, sp):
+                        tmp_graph.add_edge(sib, sp)
+                        tmp_graph.add_edge(sp, sib)
+                    tmp_graph.get_edge_data(sib,sp)['type'] = 'NN'
+                    tmp_graph.get_edge_data(sp,sib)['type'] = 'AU'
+            if parpar != []:
+                for sib in siblings:
+                    for pp in parpar:
+                        if not tmp_graph.has_edge(sib,pp):
+                            tmp_graph.add_edge(sib,pp)
+                            tmp_graph.add_edge(pp,sib)
+                        tmp_graph.get_edge_data(sib, pp)['type'] = 'GC'
+                        tmp_graph.get_edge_data(pp, sib)['type'] = 'GP'
 
 
 def getAuntsUnclesFromGraph(tmp_graph,ind):
@@ -249,7 +284,13 @@ def getElementThatAppearsLeast(tmp_list):
     #return the element of a list that appears the least number of times in the list
     return min(set(tmp_list), key=tmp_list.count)
 
-
+def checkAllNeighborsForSibs(tmp_graph,ind):
+    neighbors = tmp_graph.neighbors(ind)
+    sibs = []
+    for n in neighbors:
+        if tmp_graph.get_edge_data(ind,n)['type'] == 'FS':
+            sibs.append(n)
+    return sibs
 
 
 def pullFamily(tmp_graph,ind):

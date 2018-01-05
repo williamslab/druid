@@ -17,16 +17,16 @@ import os.path
 
 
 parser=argparse.ArgumentParser(
-    description='''DRUID v0.9.1 -- A pairwise relatedness estimator. 1/3/2017.''',
+    description='''DRUID v0.9.1a -- A pairwise relatedness estimator. 1/3/2017.''',
     epilog="""Output has extension *.DRUID and contains columns [ind1, ind2, estimated shared IBD proportion (for debugging purposes -- will be removed), DRUID's inferred degree of relatedness, Refined IBD's inferred degree of relatedness (for debugging purposes -- will be removed """)
 parser.add_argument('-o', type=str, nargs=1, default=['out'], help='Output file prefix', metavar='out')
 parser.add_argument('-i', type=str, nargs=1, required=True, help='Pairwise IBD1 & IBD2 proportions file', metavar='file.ibd12')
 parser.add_argument('-s', type=str, nargs=1, required=True, help='Pairwise IBD segments file', metavar='file.seg')
 parser.add_argument('-m', type=str, nargs=1, required=True, help='Map file (PLINK format), non-zero cM column required', metavar='file.map')
 parser.add_argument('-f', type=str, nargs=1, default=['NA'], help="Known first (FS/P/C) and second degree relationships (AU/NN/GP/GC/HS), columns: ind1/ind2/ind1's relation to ind2",metavar='file.faminfo')
-parser.add_argument('-F', type=str, nargs=1, default=['0'], help='Force DRUID to only use relationships input with -f', metavar='0/1')
+#parser.add_argument('-F', type=str, nargs=1, default=['0'], help='Force DRUID to only use relationships input with -f', metavar='0/1')
 parser.add_argument('-u', type=str, nargs=1, default=['NA'], help='File containing individuals to include', metavar='file.inds')
-parser.add_argument('-C', type=str, nargs=1, default=['0'], help='Whether to run DRUID in normal mode (0) or conservative mode (1); default is 0', metavar='0/1')
+parser.add_argument('-C', type=int, nargs=1, default=[0], help='Whether to run DRUID in normal mode (0) or conservative mode (1); default is 0', metavar='0/1')
 
 args=parser.parse_args()
 
@@ -50,7 +50,6 @@ print("Total number of individuals: " + str(len(inds)))
 
 #make graph
 rel_graph = nx.DiGraph()
-
 if args.f[0] != 'NA':
     print("Reading in family info")
     faminfo = getFamInfo(args.f[0], inds)
@@ -70,6 +69,7 @@ else:
 
     # infer second degree & aunts/uncles of sibling sets
     print("Inferring second degree relatives")
+
     inferSecondPath(rel_graph, all_rel, inds, args.s[0], args.F[0], args.o[0], int(args.C[0]))
 
 
@@ -79,7 +79,7 @@ all_results = runDRUID(rel_graph, all_rel, inds, args)
 
 
 outfile_results = open(args.o[0]+'.DRUID','w')
-outfile_results.write("ind1\tind2\tDRUID\tRefinedIBD\n")
+outfile_results.write("ind1\tind2\tDRUID\tRefinedIBD\tMethod\n")
 for res in all_results:
     if res[2] == '1U':
         res[2] = '1'
