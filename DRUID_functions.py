@@ -21,17 +21,11 @@ def forceFamInfo(rel_graph,inds, faminfo):
         for i2 in faminfo[i1].keys():
             rel_graph.add_edge(i1,i2)
             rel_graph[i1][i2]['type'] = faminfo[i1][i2]
-            # if faminfo[i1][i2] in ['C','GC']: #have to take into account directionality for edge_graph
-            #     edge_graph.add_edge(i1,i2)
-            #     edge_graph[i1][i2]['type'] = faminfo[i1][i2]
-            # elif faminfo[i1][i2] in ['P','GP']:
-            #     edge_graph.add_edge(i2,i1)
-            #     edge_graph[i2][i1]['type'] = faminfo[i1][i2]
 
 
-def inferFirst(rel_graph,all_rel,inds, C):
+def inferFirst(rel_graph,all_rel, first, second, C):
     #build graphs using first degree relative inferences
-    for [ind1,ind2] in itertools.combinations(inds, 2):
+    for [ind1,ind2] in first+second: #iterate through currently inferred first and second degree pairs
         if ind1 < ind2:
             i1 = ind1
             i2 = ind2
@@ -39,40 +33,37 @@ def inferFirst(rel_graph,all_rel,inds, C):
             i1 = ind2
             i2 = ind1
         if i1 in all_rel.keys() and i2 in all_rel[i1].keys():
-            if float(all_rel[i1][i2][3]) == 1 or float(all_rel[i1][i2][3]) == 2: #(if inferred degree is 1 or 2)
-                # all_rel: IBD1, IBD2, K, D
-                if float(all_rel[i1][i2][1]) > 1/2.0**(5/2.0): #if IBD2 meets minimum threshold
-                    rel_graph.add_edge(i1,i2)
-                    rel_graph.add_edge(i2,i1)
-                    if float(all_rel[i1][i2][2]) < 1/2.0**(3/2.0):
-                        rel_graph[i1][i2]['type'] = 'FS'
-                        rel_graph[i2][i1]['type'] = 'FS'
-                    else:
-                        rel_graph[i1][i2]['type'] = 'T' #twin
-                        rel_graph[i2][i1]['type'] = 'T'
-
-                elif float(all_rel[i1][i2][1]) > 1/2.0**(7/2.0):
-                    rel_graph.add_edge(i1,i2)
-                    rel_graph.add_edge(i2,i1)
-                    if not C and float(all_rel[i1][i2][1]) > 1/2.0**(11/4.0):
-                        print("Warning: "+i1+' and '+i2+' have low levels of IBD2 for siblings, may be 3/4 sibs')
-                        rel_graph[i1][i2]['type'] = 'FS'
-                        rel_graph[i2][i1]['type'] = 'FS'
-                    elif C and float(all_rel[i1][i2][1]) > 1/2.0**(5/2.0):
-                        rel_graph[i1][i2]['type'] = 'FS'
-                        rel_graph[i2][i1]['type'] = 'FS'
-                    else:
-                        rel_graph[i1][i2]['type'] = '1U'
-                        rel_graph[i2][i1]['type'] = '1U'
+            # all_rel: IBD1, IBD2, K, D
+            if float(all_rel[i1][i2][1]) > 1/2.0**(5/2.0): #if IBD2 meets minimum threshold
+                rel_graph.add_edge(i1,i2)
+                rel_graph.add_edge(i2,i1)
+                if float(all_rel[i1][i2][2]) < 1/2.0**(3/2.0):
+                    rel_graph[i1][i2]['type'] = 'FS'
+                    rel_graph[i2][i1]['type'] = 'FS'
                 else:
-                    if float(all_rel[i1][i2][3]) == 1:
-                        #possible parent-child pair
-                        rel_graph.add_edge(i1,i2)
-                        rel_graph.add_edge(i2,i1)
-                        # edge_graph.add_edge(i1,i2)
-                        # edge_graph.add_edge(i2,i1)
-                        rel_graph[i1][i2]['type'] = '1U'
-                        rel_graph[i2][i1]['type'] = '1U'
+                    rel_graph[i1][i2]['type'] = 'T' #twin
+                    rel_graph[i2][i1]['type'] = 'T'
+
+            elif float(all_rel[i1][i2][1]) > 1/2.0**(7/2.0):
+                rel_graph.add_edge(i1,i2)
+                rel_graph.add_edge(i2,i1)
+                if not C and float(all_rel[i1][i2][1]) > 1/2.0**(11/4.0):
+                    print("Warning: "+i1+' and '+i2+' have low levels of IBD2 for siblings, may be 3/4 sibs')
+                    rel_graph[i1][i2]['type'] = 'FS'
+                    rel_graph[i2][i1]['type'] = 'FS'
+                elif C and float(all_rel[i1][i2][1]) > 1/2.0**(5/2.0):
+                    rel_graph[i1][i2]['type'] = 'FS'
+                    rel_graph[i2][i1]['type'] = 'FS'
+                else:
+                    rel_graph[i1][i2]['type'] = '1U'
+                    rel_graph[i2][i1]['type'] = '1U'
+            else:
+                if float(all_rel[i1][i2][3]) == 1:
+                    #possible parent-child pair
+                    rel_graph.add_edge(i1,i2)
+                    rel_graph.add_edge(i2,i1)
+                    rel_graph[i1][i2]['type'] = '1U'
+                    rel_graph[i2][i1]['type'] = '1U'
 
     checked = []
     for node in rel_graph.nodes():
@@ -130,11 +121,11 @@ def inferFirst(rel_graph,all_rel,inds, C):
 
 
 
-def inferFirstFaminfo(rel_graph, all_rel, inds, C):
+def inferFirstFaminfo(rel_graph, all_rel, first, second, C):
     #build graphs using first degree relative inferences as well as provided faminfo file
 
     rel_graph_tmp = nx.DiGraph() #inferred, to be compared to input relationships
-    for [ind1, ind2] in itertools.combinations(inds, 2):
+    for [ind1, ind2] in first + second:  # iterate through currently inferred or provided first and second degree pairs
         if ind1 < ind2:
             i1 = ind1
             i2 = ind2
@@ -143,34 +134,33 @@ def inferFirstFaminfo(rel_graph, all_rel, inds, C):
             i2 = ind1
 
         if i1 in all_rel.keys() and i2 in all_rel[i1].keys():
-            if float(all_rel[i1][i2][3]) == 1:
-                if float(all_rel[i1][i2][1]) > 1 / 2.0 ** (5 / 2.0):  # IBD1, IBD2, K, D
-                    rel_graph_tmp.add_edge(i1, i2)
-                    rel_graph_tmp.add_edge(i2, i1)
-                    if float(all_rel[i1][i2][2]) < 1 / 2.0 ** (3 / 2.0):
-                        rel_graph_tmp[i1][i2]['type'] = 'FS'
-                        rel_graph_tmp[i2][i1]['type'] = 'FS'
-                    else:
-                        rel_graph_tmp[i1][i2]['type'] = 'T'  # twin
-                        rel_graph_tmp[i2][i1]['type'] = 'T'
-                elif float(all_rel[i1][i2][1]) > 1 / 2.0 ** (7 / 2.0):
-                    rel_graph.add_edge(i1, i2)
-                    rel_graph.add_edge(i2, i1)
-                    if not C and float(all_rel[i1][i2][1]) > 1 / 2.0 ** (11 / 4.0):
-                        print("Warning: " + i1 + ' and ' + i2 + ' have low levels of IBD2 for siblings, may be 3/4 sibs')
-                        rel_graph[i1][i2]['type'] = 'FS'
-                        rel_graph[i2][i1]['type'] = 'FS'
-                    elif C and float(all_rel[i1][i2][1]) > 1 / 2.0 ** (5 / 2.0):
-                        rel_graph[i1][i2]['type'] = 'FS'
-                        rel_graph[i2][i1]['type'] = 'FS'
-                    else:
-                        rel_graph[i1][i2]['type'] = '1U'
-                        rel_graph[i2][i1]['type'] = '1U'
+            if float(all_rel[i1][i2][1]) > 1 / 2.0 ** (5 / 2.0):  # IBD1, IBD2, K, D
+                rel_graph_tmp.add_edge(i1, i2)
+                rel_graph_tmp.add_edge(i2, i1)
+                if float(all_rel[i1][i2][2]) < 1 / 2.0 ** (3 / 2.0):
+                    rel_graph_tmp[i1][i2]['type'] = 'FS'
+                    rel_graph_tmp[i2][i1]['type'] = 'FS'
                 else:
-                    rel_graph_tmp.add_edge(i1, i2)
-                    rel_graph_tmp.add_edge(i2, i1)
+                    rel_graph_tmp[i1][i2]['type'] = 'T'  # twin
+                    rel_graph_tmp[i2][i1]['type'] = 'T'
+            elif float(all_rel[i1][i2][1]) > 1 / 2.0 ** (7 / 2.0):
+                rel_graph_tmp.add_edge(i1, i2)
+                rel_graph_tmp.add_edge(i2, i1)
+                if not C and float(all_rel[i1][i2][1]) > 1 / 2.0 ** (11 / 4.0):
+                    print("Warning: " + i1 + ' and ' + i2 + ' have low levels of IBD2 for siblings, may be 3/4 sibs')
+                    rel_graph_tmp[i1][i2]['type'] = 'FS'
+                    rel_graph_tmp[i2][i1]['type'] = 'FS'
+                elif C and float(all_rel[i1][i2][1]) > 1 / 2.0 ** (5 / 2.0):
+                    rel_graph_tmp[i1][i2]['type'] = 'FS'
+                    rel_graph_tmp[i2][i1]['type'] = 'FS'
+                else:
                     rel_graph_tmp[i1][i2]['type'] = '1U'
                     rel_graph_tmp[i2][i1]['type'] = '1U'
+            else:
+                rel_graph_tmp.add_edge(i1, i2)
+                rel_graph_tmp.add_edge(i2, i1)
+                rel_graph_tmp[i1][i2]['type'] = '1U'
+                rel_graph_tmp[i2][i1]['type'] = '1U'
 
 
     #ensure our sibling subgraph is adequately connected
@@ -225,7 +215,6 @@ def inferFirstFaminfo(rel_graph, all_rel, inds, C):
                 for sib in siblings:
                     rel_graph[ind][sib]['type'] = 'P'
                     rel_graph[sib][ind]['type'] = 'C'
-                    #edge_graph[sib][ind]['type'] = 'C'
 
 
     #compare inferred graph to provided graph
@@ -237,18 +226,15 @@ def inferFirstFaminfo(rel_graph, all_rel, inds, C):
         if not edge in rel_graph.edges():
             rel_graph.add_edge(edge[0],edge[1])
             rel_graph[edge[0]][edge[1]]['type'] = rel_graph_tmp.get_edge_data(edge[0],edge[1])['type']
-            # if rel_graph[edge[0]][edge[1]] in ['P','C']:
-            #     edge_graph.add_edge(edge[0],edge[1])
-            #     edge_graph[edge[0]][edge[1]] = rel_graph[edge[0]][edge[1]]
 
 
 
 
-def inferSecondPath(rel_graph,all_rel, inds, file_for_segments, force, outfile, C):
+def inferSecondPath(rel_graph, all_rel, second, file_for_segments, force, outfile, C):
     # infer and add 2nd degree relationships
-    for [ind1,ind2] in itertools.combinations(inds, 2):
+    for [ind1, ind2] in second:
         #if not rel_graph.has_edge(ind1,ind2) or not rel_graph.get_edge_data(ind1,ind2)['type'] in ['NN','AU']:
-        if not rel_graph.has_edge(ind1, ind2) or (force == 1 and not not rel_graph.get_edge_data(ind1,ind2)['type'] in ['NN','AU']):
+        if not rel_graph.has_edge(ind1, ind2) or force == 1: #and not rel_graph.get_edge_data(ind1,ind2)['type'] in ['NN','AU']):
             if ind1 < ind2:
                 i1 = ind1
                 i2 = ind2
@@ -256,32 +242,30 @@ def inferSecondPath(rel_graph,all_rel, inds, file_for_segments, force, outfile, 
                 i1 = ind2
                 i2 = ind1
             if i1 in all_rel.keys() and i2 in all_rel[i1].keys():
-                #print(i1+'\t'+i2)
-                if float(all_rel[i1][i2][3]) == 2:
-                    if float(all_rel[i1][i2][1]) < 0.01: #proportion IBD2 less than 0.01
-                        tmp = i1+'_'+i2
-                        rel_graph.add_edge(i1,i2)
-                        rel_graph.add_edge(i2,i1)
-                        rel_graph[i1][i2]['type'] = '2'
-                        rel_graph[i2][i1]['type'] = '2'
-                    elif float(all_rel[i1][i2][1]) > 1/2.0**(7/2.0): #high IBD2 even though second degree
-                        sib1 = getSibsFromGraph(rel_graph,i1)
-                        sib2 = getSibsFromGraph(rel_graph,i2)
-                        sib1.append(i1)
-                        sib2.append(i2)
-                        for s1 in sib1:
-                            for s2 in sib2:
-                                if not rel_graph.get_edge_data(s1,s2)['type'] == 'FS':
-                                    if not rel_graph.has_edge(s1,s2):
-                                        rel_graph.add_edge(s1, s2)
-                                        rel_graph.add_edge(s2, s1)
-                                    rel_graph[s1][s2]['type'] = '1U'
-                                    rel_graph[s2][s1]['type'] = '1U'
-                    else: #if IBD2 is too high, label as DC so we don't use
-                        rel_graph.add_edge(i1,i2)
-                        rel_graph.add_edge(i2,i1)
-                        rel_graph[i1][i2]['type'] = 'DC'
-                        rel_graph[i2][i1]['type'] = 'DC'
+                if float(all_rel[i1][i2][1]) < 0.01: #proportion IBD2 less than 0.01
+                    tmp = i1+'_'+i2
+                    rel_graph.add_edge(i1,i2)
+                    rel_graph.add_edge(i2,i1)
+                    rel_graph[i1][i2]['type'] = '2'
+                    rel_graph[i2][i1]['type'] = '2'
+                elif float(all_rel[i1][i2][1]) > 1/2.0**(7/2.0): #high IBD2 even though second degree
+                    sib1 = getSibsFromGraph(rel_graph,i1)
+                    sib2 = getSibsFromGraph(rel_graph,i2)
+                    sib1.append(i1)
+                    sib2.append(i2)
+                    for s1 in sib1:
+                        for s2 in sib2:
+                            if not rel_graph.get_edge_data(s1,s2)['type'] == 'FS':
+                                if not rel_graph.has_edge(s1,s2):
+                                    rel_graph.add_edge(s1, s2)
+                                    rel_graph.add_edge(s2, s1)
+                                rel_graph[s1][s2]['type'] = '1U'
+                                rel_graph[s2][s1]['type'] = '1U'
+                else: #if IBD2 is too high, label as DC so we don't use
+                    rel_graph.add_edge(i1,i2)
+                    rel_graph.add_edge(i2,i1)
+                    rel_graph[i1][i2]['type'] = 'DC'
+                    rel_graph[i2][i1]['type'] = 'DC'
 
     checked = []
     for node in rel_graph.nodes():
@@ -1413,10 +1397,12 @@ def getTotalLength(IBD):
 
 def getAllRel(results_file, inds_file):
     # read in results file:
-    # ind1, ind2, IBD1, IBD2
+    # all_rel: dict of ind1, dict of ind2, list of [IBD1, IBD2, K, D
     # store pairwise relatedness information
     global all_rel
     global inds
+    first = [] #list of first degree relative pairs, according to Refined IBD results
+    second = [] #list of second degree relative pairs, according to Refined IBD results
     inds = []
     if inds_file != 'NA':
         file = open(inds_file,'r')
@@ -1436,14 +1422,24 @@ def getAllRel(results_file, inds_file):
             if not l[1] in inds:
                 inds.append(l[1])
             K = float(l[2])/4.0 + float(l[3])/2.0
+            degree = getInferredFromK(K)
             if l[0] < l[1]:
                 if not l[0] in all_rel.keys():
                     all_rel[l[0]] = {} #IBD1, IBD2, K, D
-                all_rel[l[0]][l[1]] = [float(l[2]),float(l[3]), K, getInferredFromK(K)]
+
+                all_rel[l[0]][l[1]] = [float(l[2]),float(l[3]), K, degree]
+                if degree == 1:
+                    first.append([l[0],l[1]])
+                elif degree == 2:
+                    second.append([l[0],l[1]])
             else:
                 if not l[1] in all_rel.keys():
                     all_rel[l[1]] = {}
-                all_rel[l[1]][l[0]] = [float(l[2]), float(l[3]), K, getInferredFromK(K)]
+                all_rel[l[1]][l[0]] = [float(l[2]), float(l[3]), K, degree]
+                if degree == 1:
+                    first.append([l[1],l[0]])
+                elif degree == 2:
+                    second.append([l[1],l[0]])
     else:
         for line in file:
             l = str.split(line.rstrip())
@@ -1473,7 +1469,7 @@ def getAllRel(results_file, inds_file):
                 all_rel[ind2][ind1] = [-1,-1,-1,-1]
 
 
-    return [all_rel,inds]
+    return [all_rel,inds,first,second]
 
 
 def getSecondDegreeRelativesFromAllRel(all_rel,inds,sibset):
