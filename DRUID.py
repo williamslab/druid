@@ -29,8 +29,10 @@ parser.add_argument('-u', type=str, nargs=1, default=['NA'], help='File containi
 parser.add_argument('-C', type=int, nargs=1, default=[0], help='Whether to run DRUID in normal mode (0) or conservative mode (1); default is 0', metavar='0/1')
 
 #args=parser.parse_args()
-args=parser.parse_args(['-i','../testfiles/safs_fam40.kin','-m','../testfiles/safs_filter2_geno0.02_mind0.1_ALL_fixed.map','-s','../testfiles/safs_fam40.seg','-u','../testfiles/safs_fam40.inds','-C','0'])#,'-f','../testfiles/fam2_SAFSex.rel2'])
+#args=parser.parse_args(['-i','../testfiles/safs_fam40.kin','-m','../testfiles/safs_filter2_geno0.02_mind0.1_ALL_fixed.map','-s','../testfiles/safs_fam40.seg','-u','../testfiles/safs_fam40.inds','-C','0'])#,'-f','../testfiles/fam2_SAFSex.rel2'])
+args=parser.parse_args(['-i','../testfiles/safs_fam40.kin','-m','../testfiles/safs_filter2_geno0.02_mind0.1_ALL_fixed.map','-s','../testfiles/safs_fam40_small.seg','-u','../testfiles/safs_fam40_small.inds','-C','0', '-f', '../testfiles/safs_fam40_small.rel'])#,'-f','../testfiles/fam2_SAFSex.rel2'])
 
+inds = []
 
 print("Using IBD12 file: "+args.i[0])
 print("Using map file: "+args.m[0])
@@ -55,14 +57,13 @@ if args.f[0] != 'NA':
     print("Reading in family info")
     faminfo = getFamInfo(args.f[0], inds)
     forceFamInfo(rel_graph,inds, faminfo)
-    if args.F[0] == '0':
-        # infer and add siblings, parents; other first degrees are labeled as '1'
-        print("Inferring first degree relatives")
-        inferFirstFaminfo(rel_graph, all_rel, first, second, int(args.C[0]))
 
-        # infer second degree & aunts/uncles of sibling sets
-        print("Inferring second degree relatives")
-        inferSecondPath(rel_graph, all_rel, second, args.s[0], args.F[0], args.o[0], int(args.C[0]))
+    print("Inferring first degree relatives")
+    inferFirstFaminfo(rel_graph, all_rel, first, second, int(args.C[0]))
+
+    # infer second degree & aunts/uncles of sibling sets
+    print("Inferring second degree relatives")
+    inferSecondPath(rel_graph, all_rel, second, args.s[0], args.o[0], int(args.C[0]))
 else:
     # infer and add siblings, parents; other first degrees are labeled as '1'
     print("Inferring first degree relatives")
@@ -71,7 +72,7 @@ else:
     # infer second degree & aunts/uncles of sibling sets
     print("Inferring second degree relatives")
 
-    inferSecondPath(rel_graph, all_rel, second, args.s[0], args.F[0], args.o[0], int(args.C[0]))
+    inferSecondPath(rel_graph, all_rel, second, args.s[0], args.o[0], int(args.C[0]))
 
 
 
