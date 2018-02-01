@@ -28,9 +28,7 @@ parser.add_argument('-f', type=str, nargs=1, default=['NA'], help="Known first (
 parser.add_argument('-u', type=str, nargs=1, default=['NA'], help='File containing individuals to include', metavar='file.inds')
 parser.add_argument('-C', type=int, nargs=1, default=[0], help='Whether to run DRUID in normal mode (0) or conservative mode (1); default is 0', metavar='0/1')
 
-#args=parser.parse_args()
-#args=parser.parse_args(['-i','../testfiles/safs_fam40.kin','-m','../testfiles/safs_filter2_geno0.02_mind0.1_ALL_fixed.map','-s','../testfiles/safs_fam40.seg','-u','../testfiles/safs_fam40.inds','-C','0'])#,'-f','../testfiles/fam2_SAFSex.rel2'])
-args=parser.parse_args(['-i','../testfiles/safs_fam40.kin','-m','../testfiles/safs_filter2_geno0.02_mind0.1_ALL_fixed.map','-s','../testfiles/safs_fam40_small.seg','-u','../testfiles/safs_fam40_small.inds','-C','0', '-f', '../testfiles/safs_fam40_small.rel'])#,'-f','../testfiles/fam2_SAFSex.rel2'])
+args=parser.parse_args()
 
 inds = []
 

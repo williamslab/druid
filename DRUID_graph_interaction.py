@@ -95,12 +95,12 @@ def getRelationship(tmp_graph,ind1,ind2):
 
 def getLargestSibsets(tmp_graph,all_inds):
     sibsets = []
-    checked = []
+    checked = set()
     for ind in all_inds:
         if not ind in checked:
             [sib, avunc_bothsides, nn, par, child, gp, halfsib_sets, twins] = pullFamily(tmp_graph, ind)
-            sib.append(ind)
-            checked = checked + sib
+            sib.add(ind)
+            checked = checked.union(sib)
             sibsets.append(sib)
 
     sizes = [len(x) for x in sibsets]
@@ -138,26 +138,26 @@ def checkIfParent(tmp_graph,all_rel,sibset,ind):
 
 def getSibsFromGraph(tmp_graph,ind):
     #return the siblings of ind
-    sibs = []
+    sibs = set()
     if ind in tmp_graph:
         neighbors = tmp_graph.neighbors(ind)
         for x in neighbors:
             if checkIfSib(tmp_graph,ind,x):
-                sibs.append(x)
+                sibs.add(x)
     return sibs
 
 
 
 def getSibsAndHalfSibsFromGraph(tmp_graph,ind):
     #return the siblings and half-sibs of ind
-    hs = []
-    sibs = []
+    hs = set()
+    sibs = set()
     neighbors = tmp_graph.neighbors(ind)
     for x in neighbors:
         if tmp_graph.get_edge_data(ind,x)['type'] == 'HS':
-            hs.append(x)
+            hs.add(x)
         elif tmp_graph.get_edge_data(ind,x)['type'] == 'FS':
-            sibs.append(x)
+            sibs.add(x)
 
     halfsib_sets = []
     while len(hs):
@@ -181,16 +181,16 @@ def checkSiblingSubgraph(tmp_graph,siblings):
     all_sibs = []
     for ind in siblings: #for each sibling, collect his/her siblings currently in graph
         sibs_ind = getSibsFromGraph(tmp_graph,ind)
-        all_sibs = all_sibs + sibs_ind
+        all_sibs = all_sibs + list(sibs_ind)
     collected_sibs = list(set(all_sibs))
     sibs_add = []
     for x in collected_sibs:
         if not x in siblings:
             sibs_add.append(x)
-    siblings = siblings + sibs_add
+    siblings = list(siblings) + sibs_add
     for ind in sibs_add:
         sibs_ind = getSibsFromGraph(tmp_graph,ind)
-        all_sibs = all_sibs + sibs_ind
+        all_sibs = all_sibs + list(sibs_ind)
     counts = [all_sibs.count(x) for x in all_sibs] #count number of times each reported sibling appears
 
     while not all(x >= round(len(list(set(all_sibs)))/2.0) for x in counts): #if any individual in all_sibs is found to be a sibling with less than half of the other siblings
@@ -216,24 +216,24 @@ def checkForMoveUp(all_rel, ind, sibset, older_gen, third_party):
         if anyIn(older_gen,third_party):
             return 'same'
         else:
-            all_sib = []
+            all_sib = set()
             for sib in sibset:
                 for tp in third_party:
                     if sib < tp:
-                        all_sib.append(float(all_rel[sib][tp][2]))
+                        all_sib.add(float(all_rel[sib][tp][2]))
                     else:
-                        all_sib.append(float(all_rel[tp][sib][2]))
+                        all_sib.add(float(all_rel[tp][sib][2]))
             maxsib = max(all_sib)
 
-            maxpar = []
+            maxpar = set()
             for par in older_gen:
-                all_par = []
+                all_par = set()
                 for tp in third_party:
                     if par < tp:
-                        all_par.append(float(all_rel[par][tp][2]))
+                        all_par.add(float(all_rel[par][tp][2]))
                     else:
-                        all_par.append(float(all_rel[tp][par][2]))
-                maxpar.append(max(all_par))
+                        all_par.add(float(all_rel[tp][par][2]))
+                maxpar.add(max(all_par))
 
 
 
@@ -296,34 +296,34 @@ def checkAllNeighborsForSibs(tmp_graph,ind):
 def pullFamily(tmp_graph,ind):
     # get all possible connections in graph: siblings, aunts/uncles, parents, children, grandparents, half-siblings, and twins of ind
     edges = tmp_graph.edges(ind)
-    parents = []
-    children = []
-    avunc = []
-    sib = []
-    grandparents = []
-    halfsibs = []
-    nn = []
-    twins = []
+    parents = set()
+    children = set()
+    avunc = set()
+    sib = set()
+    grandparents = set()
+    halfsibs = set()
+    nn = set()
+    twins = set()
     for edge in edges:
         edge_info = tmp_graph.get_edge_data(edge[0],edge[1])['type']
         if edge[0] == ind:
             if edge_info == 'P':
-                children.append(edge[1])
+                children.add(edge[1])
             elif edge_info == 'C':
-                parents.append(edge[1])
+                parents.add(edge[1])
             elif edge_info == 'FS':
                 if not edge[1] in sib:
-                    sib.append(edge[1])
+                    sib.add(edge[1])
             elif edge_info == 'NN':
-                avunc.append(edge[1])
+                avunc.add(edge[1])
             elif edge_info == 'GC':
-                grandparents.append(edge[1])
+                grandparents.add(edge[1])
             elif edge_info == 'HS':
-                halfsibs.append(edge[1])
+                halfsibs.add(edge[1])
             elif edge_info == 'AU':
-                nn.append(edge[1])
+                nn.add(edge[1])
             elif edge_info == 'T':
-                twins.append(edge[1])
+                twins.add(edge[1])
     avunc_sets = []
     tmp=tmp_graph.subgraph(avunc)
     for x in nx.strongly_connected_components(tmp):
