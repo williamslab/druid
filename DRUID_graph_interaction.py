@@ -173,38 +173,54 @@ def getSibsAndHalfSibsFromGraph(tmp_graph,ind):
 
 
 
-def checkSiblingSubgraph(tmp_graph,siblings):
-    ###only used for file preparation###
+def checkSiblingSubgraph(tmp_graph,siblings,C):
     # check whether all nodes in a sibling subgraph have a direct edge between one-another;
     # if not, greedily remove the sibling node with the least direct edges connecting to other siblings until they're all connected
+
+    #first, get all sibs (check neighbors) of given set 'siblings' and add to 'siblings'
     remove = []
     all_sibs = []
     for ind in siblings: #for each sibling, collect his/her siblings currently in graph
         sibs_ind = getSibsFromGraph(tmp_graph,ind)
         all_sibs = all_sibs + list(sibs_ind)
-    collected_sibs = list(set(all_sibs))
-    sibs_add = []
-    for x in collected_sibs:
-        if not x in siblings:
-            sibs_add.append(x)
-    siblings = list(siblings) + sibs_add
+    #get sibs that weren't included in given set 'siblings'
+    sibs_add = set(all_sibs).difference(siblings)
+    #update 'siblings' to include those sibs
+    siblings = siblings.union(sibs_add)
+
+    #second, count the number of times each sib missing from the initial 'siblings' set is considered a sibling of another sib
     for ind in sibs_add:
         sibs_ind = getSibsFromGraph(tmp_graph,ind)
         all_sibs = all_sibs + list(sibs_ind)
     counts = [all_sibs.count(x) for x in all_sibs] #count number of times each reported sibling appears
 
-    while not all(x >= round(len(list(set(all_sibs)))/2.0) for x in counts): #if any individual in all_sibs is found to be a sibling with less than half of the other siblings
-        to_remove = getElementThatAppearsLeast(all_sibs)
-        remove.append(to_remove)
-        if to_remove in siblings:
-            siblings.remove(to_remove)
-        all_sibs = []
-        for ind in siblings:
-            sibs_ind = getSibsFromGraph(tmp_graph,ind)
-            for x in sibs_ind:
-                if not x in remove:
-                    all_sibs.append(x)
-        counts = [all_sibs.count(x) for x in all_sibs]
+    if not C: #if not DRUID_C
+        while not all(x >= round(len(list(set(all_sibs)))/2.0) for x in counts): #if any individual in all_sibs is found to be a sibling with less than half of the other siblings
+            to_remove = getElementThatAppearsLeast(all_sibs)
+            remove.append(to_remove)
+            if to_remove in siblings:
+                siblings.remove(to_remove)
+            all_sibs = []
+            for ind in siblings:
+                sibs_ind = getSibsFromGraph(tmp_graph,ind)
+                for x in sibs_ind:
+                    if not x in remove:
+                        all_sibs.append(x)
+            counts = [all_sibs.count(x) for x in all_sibs]
+    else: #if DRUID_C
+        while not all(x == len(set(all_sibs)) for x in counts):  # if any individual in all_sibs is found to be a sibling with less than half of the other siblings
+            to_remove = getElementThatAppearsLeast(all_sibs)
+            remove.append(to_remove)
+            if to_remove in siblings:
+                siblings.remove(to_remove)
+            all_sibs = []
+            for ind in siblings:
+                sibs_ind = getSibsFromGraph(tmp_graph, ind)
+                for x in sibs_ind:
+                    if not x in remove:
+                        all_sibs.append(x)
+            counts = [all_sibs.count(x) for x in all_sibs]
+
     return [list(set(all_sibs)), remove]
 
 def anyIn(list1,list2):
@@ -220,25 +236,23 @@ def checkForMoveUp(all_rel, ind, sibset, older_gen, third_party):
             for sib in sibset:
                 for tp in third_party:
                     if sib < tp:
-                        all_sib.add(float(all_rel[sib][tp][2]))
+                        all_sib.add(all_rel[sib][tp][2])
                     else:
-                        all_sib.add(float(all_rel[tp][sib][2]))
+                        all_sib.add(all_rel[tp][sib][2])
             maxsib = max(all_sib)
 
-            maxpar = set()
+            maxpar = []
             for par in older_gen:
                 all_par = set()
                 for tp in third_party:
                     if par < tp:
-                        all_par.add(float(all_rel[par][tp][2]))
+                        all_par.add(all_rel[par][tp][2])
                     else:
-                        all_par.add(float(all_rel[tp][par][2]))
-                maxpar.add(max(all_par))
-
-
+                        all_par.add(all_rel[tp][par][2])
+                maxpar.append(max(all_par))
 
         if max(maxpar) > maxsib:
-            par_use = older_gen[maxpar.index(max(maxpar))]
+            par_use = list(older_gen)[maxpar.index(max(maxpar))]
             return par_use
         else:
             return ind
