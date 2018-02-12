@@ -3,12 +3,9 @@ import sys
 import Bio
 import itertools
 import networkx as nx
-import multiprocessing
 import random
 import copy
 import numpy as np
-from joblib import Parallel,delayed
-import multiprocessing
 import glob, os
 from DRUID_functions import *
 from DRUID_graph_interaction import *
@@ -17,18 +14,18 @@ import os.path
 
 
 parser=argparse.ArgumentParser(
-    description='''DRUID v0.9.1a -- A multiway relatedness estimator. 1/3/2018.''',
+    description='''DRUID v0.9.2a -- A multiway relatedness estimator. 2/12/2018.''',
     epilog="""Output has extension *.DRUID and contains columns [ind1, ind2, estimated shared IBD proportion (for debugging purposes -- will be removed), DRUID's inferred degree of relatedness, Refined IBD's inferred degree of relatedness (for debugging purposes -- will be removed """)
 parser.add_argument('-o', type=str, nargs=1, default=['out'], help='Output file prefix', metavar='out')
 parser.add_argument('-i', type=str, nargs=1, required=True, help='Pairwise IBD1 & IBD2 proportions file', metavar='file.ibd12')
 parser.add_argument('-s', type=str, nargs=1, required=True, help='Pairwise IBD segments file', metavar='file.seg')
 parser.add_argument('-m', type=str, nargs=1, required=True, help='Map file (PLINK format), non-zero cM column required', metavar='file.map')
 parser.add_argument('-f', type=str, nargs=1, default=[''], help="Known first (FS/P/C) and second degree relationships (AU/NN/GP/GC/HS), columns: ind1/ind2/ind1's relation to ind2",metavar='file.faminfo')
-#parser.add_argument('-F', type=str, nargs=1, default=['0'], help='Force DRUID to only use relationships input with -f', metavar='0/1')
 parser.add_argument('-u', type=str, nargs=1, default=[''], help='File containing individuals to include', metavar='file.inds')
 parser.add_argument('-C', type=int, nargs=1, default=[0], help='Whether to run DRUID in normal mode (0) or conservative mode (1); default is 0', metavar='0/1')
 
 args=parser.parse_args()
+
 
 inds = []
 
@@ -83,6 +80,12 @@ outfile_results.write("ind1\tind2\tDRUID\tRefinedIBD\tMethod\n")
 for res in all_results:
     if res[2] == '1U':
         res[2] = '1'
+    elif res[2] in ['-1',-1]:
+        res[2] = 'MZ'
+        res[3] = 'MZ'
+    elif res[2] == '0':
+        res[2] = 'UN'
+        res[3] = 'UN'
     outfile_results.write("\t".join(map(str,res))+'\n')
 
 

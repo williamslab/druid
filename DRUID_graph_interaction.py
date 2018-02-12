@@ -3,7 +3,6 @@ import sys
 import Bio
 import itertools
 import networkx as nx
-import multiprocessing
 import random
 import copy
 import numpy as np

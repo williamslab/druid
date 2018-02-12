@@ -3,7 +3,6 @@ import sys
 import Bio
 import itertools
 import networkx as nx
-import multiprocessing
 import random
 import copy
 import numpy as np
@@ -243,6 +242,13 @@ def inferFirstFaminfo(rel_graph, all_rel, first, second, C):
 
 def inferSecondPath(rel_graph, all_rel, second, third, file_for_segments, outfile, C):
     # infer and add 2nd degree relationships
+
+    if C:
+        dc_lower = 0.1 #minimum IBD2 for DC classification
+        dc_upper = 1
+    else:
+        dc_lower = 1/2.0**(9/2.0)
+        dc_upper = 1/2.0**(11/2.0)
     for [ind1, ind2] in second:
         if not rel_graph.has_edge(ind1, ind2):
             if ind1 < ind2:
@@ -252,31 +258,58 @@ def inferSecondPath(rel_graph, all_rel, second, third, file_for_segments, outfil
                 i1 = ind2
                 i2 = ind1
             if i1 in all_rel.keys() and i2 in all_rel[i1].keys():
-                if all_rel[i1][i2][1] < 0.01: #proportion IBD2 less than 0.01
+                if all_rel[i1][i2][1] < dc_lower: #proportion IBD2 less than requirement for DC classification
                     rel_graph.add_edge(i1,i2)
                     rel_graph.add_edge(i2,i1)
                     rel_graph[i1][i2]['type'] = '2'
                     rel_graph[i2][i1]['type'] = '2'
-                elif all_rel[i1][i2][1] > 1/2.0**(7/2.0): #high IBD2 even though second degree
+                elif all_rel[i1][i2][1] < dc_upper: #proportion IBD2 within requirement for DC classification
                     sib1 = getSibsFromGraph(rel_graph,i1)
                     sib2 = getSibsFromGraph(rel_graph,i2)
                     sib1.append(i1)
                     sib2.append(i2)
+                    #if one i1 is a DC of i2, then siblings of i1 are DC of siblings of i2 (and i2)
                     for s1 in sib1:
                         for s2 in sib2:
-                            if not rel_graph.get_edge_data(s1,s2)['type'] == 'FS':
-                                if not rel_graph.has_edge(s1,s2):
-                                    rel_graph.add_edge(s1, s2)
-                                    rel_graph.add_edge(s2, s1)
-                                rel_graph[s1][s2]['type'] = '1U'
-                                rel_graph[s2][s1]['type'] = '1U'
-                else: #if IBD2 is too high, label as DC so we don't use
-                    rel_graph.add_edge(i1,i2)
-                    rel_graph.add_edge(i2,i1)
-                    rel_graph[i1][i2]['type'] = 'DC'
-                    rel_graph[i2][i1]['type'] = 'DC'
+                            if not rel_graph.has_edge(s1,s2):
+                                rel_graph.add_edge(s1, s2)
+                                rel_graph.add_edge(s2, s1)
+                                rel_graph[s1][s2]['type'] = 'DC'
+                                rel_graph[s2][s1]['type'] = 'DC'
+                            elif not rel_graph.get_edge_data(s1,s2)['type'] == 'FS':
+                                #label as DC
+                                rel_graph[s1][s2]['type'] = 'DC'
+                                rel_graph[s2][s1]['type'] = 'DC'
+
             else:
                 print("ERROR: no pairwise information for "+i1+' and '+i2)
+
+    for [ind1, ind2] in third:
+        if not rel_graph.has_edge(ind1, ind2):
+            if ind1 < ind2:
+                i1 = ind1
+                i2 = ind2
+            else:
+                i1 = ind2
+                i2 = ind1
+            if i1 in all_rel.keys() and i2 in all_rel[i1].keys():
+                if all_rel[i1][i2][1] >= dc_lower and all_rel[i1][i2][1] <= dc_upper: #proportion IBD2 within requirement for DC classification
+                    sib1 = getSibsFromGraph(rel_graph,i1)
+                    sib2 = getSibsFromGraph(rel_graph,i2)
+                    sib1.append(i1)
+                    sib2.append(i2)
+                    # if one i1 is a DC of i2, then siblings of i1 are DC of siblings of i2 (and i2)
+                    for s1 in sib1:
+                        for s2 in sib2:
+                            if not rel_graph.has_edge(s1, s2):
+                                rel_graph.add_edge(s1, s2)
+                                rel_graph.add_edge(s2, s1)
+                                rel_graph[s1][s2]['type'] = 'DC'
+                                rel_graph[s2][s1]['type'] = 'DC'
+                            elif not rel_graph.get_edge_data(s1, s2)['type'] == 'FS':
+                                # label as DC
+                                rel_graph[s1][s2]['type'] = 'DC'
+                                rel_graph[s2][s1]['type'] = 'DC'
 
     checked = set()
     for node in rel_graph.nodes():
@@ -1460,6 +1493,7 @@ def getAllRel(results_file, inds_file):
                     second.append([l[1],l[0]])
                 elif degree == 3:
                     third.append([l[1],l[0]])
+        file.close()
     else:
         for line in file:
             l = str.split(line.rstrip())
@@ -1489,19 +1523,20 @@ def getAllRel(results_file, inds_file):
                     elif degree == 3:
                         third.append([l[1], l[0]])
 
-    file.close()
+        file.close()
+
 
     for [ind1,ind2] in itertools.combinations(inds, 2):
         if ind1 < ind2:
             if not ind1 in all_rel.keys():
                 all_rel[ind1] = {}
             if not ind2 in all_rel[ind1].keys():
-                all_rel[ind1][ind2] = [-1, -1, -1, -1]
+                all_rel[ind1][ind2] = [0,0,0,0]
         else:
             if not ind2 in all_rel.keys():
                 all_rel[ind2] = {}
             if not ind1 in all_rel[ind2].keys():
-                all_rel[ind2][ind1] = [-1,-1,-1,-1]
+                all_rel[ind2][ind1] = [0,0,0,0]
 
 
     return [all_rel,inds,first,second,third]
