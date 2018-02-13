@@ -25,12 +25,12 @@ DRUID requires a minimum of three files:
 PROVIDING KNOWN RELATIONSHIP INFORMATION
 ----------------------------------------
 
-DRUID can be provided first and second degree (specifically, half-sibling, grandparent-grandchild, avuncular) relationships to make use of via the flag '-f [file.faminfo]'.  
+DRUID can be provided first and second degree (specifically, half-sibling, grandparent-grandchild, avuncular) relationships to make use of via the flag `-f [file.faminfo]`.  
 The .faminfo file should be space-delimited and formatted as follows:
 
 ind1 ind2 [ind1's relationship to ind2]
 
-"ind1's relationship to ind2" must be one of the following types:
+'ind1's relationship to ind2' must be one of the following types:
 
 FS: full-sibling  
 P: parent  
@@ -51,7 +51,7 @@ A B AU
 RUNNING ONLY ON SPECIFIC INDIVIDUALS
 ------------------------------------
 
-One may run DRUID on a subset of individuals in the dataset via the flag '-u [file.inds]'.  
+One may run DRUID on a subset of individuals in the dataset via the flag `-u [file.inds]`.  
 If one wishes to analyze only individuals A,B, and K, 'file.inds' should appear as follows:
 
 A  
@@ -66,7 +66,7 @@ RUNNING DRUID CONSERVATIVE
 --------------------------
 
 Some datasets may have complex relationships or inbred individuals.  
-While we recommend to be weary of results from such datasets, one may run a conservative version of DRUID (as described in the paper) via the flag '-C 1'.
+While we recommend to be weary of results from such datasets, one may run a conservative version of DRUID (as described in the paper) via the flag `-C 1`.
 
 
 
@@ -86,17 +86,18 @@ http://github.com/MonicaRamstetter/bakeoff.
 
 To obtain the files necessary for running DRUID, one should run the getIBD.py script as follows:
 
-python getIBD.py -f [file1.ibd] [file2.ibd] [file3.ibd] -m [mapfile.map] -t 1 -s 1 -o [output_prefix]
+`python getIBD.py -f [file1.ibd] [file2.ibd] [file3.ibd] -m [mapfile.map] -t 1 -s 1 -o [output_prefix]`
 
-where file1.ibd, file2.ibd, and file3.ibd are the three .ibd files output by Refined IBD, mapfile.map is a PLINK formatted map file containing genetic position information which  
-corresponds to the VCF file input to Refined IBD, '-t 1' ensures pairwise proportions of genome shared IBD are output, and '-s 1' ensures segment information is output.
+where 'file1.ibd', 'file2.ibd', and 'file3.ibd' are the three .ibd files output by Refined IBD, 'mapfile.map' is a PLINK formatted map file containing genetic position information which  
+corresponds to the VCF file input to Refined IBD, `-t 1` ensures pairwise proportions of genome shared IBD are output, and `-s 1` ensures segment information is output.
 
 
 
 DRUID OUTPUT
 ------------
 
-Four columns:  
+Four columns:
+
 ind1  
 ind2  
 DRUID (degree of relatedness/relationship inferred by DRUID)  
