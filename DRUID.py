@@ -26,7 +26,6 @@ parser.add_argument('-C', type=int, nargs=1, default=[0], help='Whether to run D
 
 args=parser.parse_args()
 
-
 inds = []
 
 print("Using IBD12 file: "+args.i[0])

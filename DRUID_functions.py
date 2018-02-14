@@ -175,7 +175,7 @@ def inferFirstFaminfo(rel_graph, all_rel, first, second, C):
     for node in rel_graph_tmp.nodes():
         if not node in checked:
             siblings = getSibsFromGraph(rel_graph_tmp,node)
-            siblings.append(node)
+            siblings.add(node)
             for sib in siblings:
                 checked.add(sib)
             [add_sibs,remove] = checkSiblingSubgraph(rel_graph_tmp,siblings.copy(),C) #edit siblings list, return removed sibs
@@ -205,6 +205,7 @@ def inferFirstFaminfo(rel_graph, all_rel, first, second, C):
 
             #now that sibling set is completed, look for parents
             #find neighbors of first sibling set labeled as '1'
+            siblings = list(siblings)
             neighbors = rel_graph_tmp.neighbors(siblings[0])
             inds_to_check = set()
             for n in neighbors:
@@ -1452,7 +1453,7 @@ def getAllRel(results_file, inds_file):
     second = [] #list of second degree relative pairs according to Refined IBD results
     third = [] #list of third degree relative pairs according to Refined IBD results
     inds = []
-    if inds_file != 'NA':
+    if inds_file != '':
         file = open(inds_file,'r')
         for line in file:
             l = str.split(line.rstrip())
@@ -1824,7 +1825,7 @@ def runDRUID(rel_graph, all_rel, inds, args):
                             ind2 = ind2_new
                             [sib2, avunc2_bothsides, nn2, par2, child2, gp2, halfsib2_sets, twins2] = pullFamily(rel_graph, ind2)
                             sib2.add(ind2)
-                            ind2_new = checkForMoveUp(all_rel,ind2, sib2, gp2+par2, sib1)
+                            ind2_new = checkForMoveUp(all_rel,ind2, sib2, gp2.union(par2), sib1)
 
                         if ind2_new == 'same':
                             ind2 = anyIn(gp2 + par2, sib1)[0]
@@ -1918,15 +1919,15 @@ def runDRUID(rel_graph, all_rel, inds, args):
                                 refined = all_rel[moves_inds1[ii]][ind2][3]
                             else:
                                 refined = all_rel[ind2][moves_inds1[ii]][3]
-                            results.append([moves_inds1[ii],ind2,total,refined,ind1_original,ind2_original, 'graph+inferred'])
+                            results.append([moves_inds1[ii],ind2,total,refined, 'graph+inferred'])
                             #check for close relatives of moves_inds[ii]
                             [sib1, avunc1_bothsides, nn1, par1, child1, gp1, halfsib1_sets, twins1] = pullFamily(rel_graph, moves_inds1[ii])
                             for s1 in sib1:
-                                results.append([s1,ind2,total,refined,ind1_original,ind2_original, 'graph+inferred'])
+                                results.append([s1,ind2,total,refined,'graph+inferred'])
                             sib1.add(moves_inds1[ii])
                             hs1 = checkUseHalfsibs(sib1, halfsib1_sets, ind2, all_rel)
                             for h1 in hs1:
-                                results.append([h1,ind2,total,refined,ind1_original,ind2_original, 'graph+inferred'])
+                                results.append([h1,ind2,total,refined, 'graph+inferred'])
 
                         total = int(closest_result[2])
                         for ii in range(len(moves2)-1,-1,-1):
@@ -1938,15 +1939,15 @@ def runDRUID(rel_graph, all_rel, inds, args):
                                 refined = all_rel[moves_inds2[ii]][ind1][3]
                             else:
                                 refined = all_rel[ind1][moves_inds2[ii]][3]
-                            results.append([ind1,moves_inds2[ii],total,refined,ind1_original,ind2_original, 'graph+inferred'])
+                            results.append([ind1,moves_inds2[ii],total,refined, 'graph+inferred'])
                             #check for close relatives of moves_inds[ii]
                             [sib2, avunc2_bothsides, nn2, par2, child2, gp2, halfsib2_sets, twins2] = pullFamily(rel_graph, moves_inds2[ii])
                             for s2 in sib2:
-                                results.append([ind1,s2,total,refined,ind1_original,ind2_original, 'graph+inferred'])
+                                results.append([ind1,s2,total,refined, 'graph+inferred'])
                             sib2.add(moves_inds2[ii])
                             hs2 = checkUseHalfsibs(sib2, halfsib2_sets, ind1, all_rel)
                             for h2 in hs2:
-                                results.append([ind1,h2,total,refined,ind1_original,ind2_original, 'graph+inferred'])
+                                results.append([ind1,h2,total,refined,'graph+inferred'])
 
                         if len(moves1) and len(moves2):
                             total = int(closest_result[2])
