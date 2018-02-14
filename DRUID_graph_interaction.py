@@ -97,7 +97,7 @@ def getLargestSibsets(tmp_graph,all_inds):
     checked = set()
     for ind in all_inds:
         if not ind in checked:
-            [sib, avunc_bothsides, nn, par, child, gp, halfsib_sets, twins] = pullFamily(tmp_graph, ind)
+            [sib, avunc_bothsides, nn, par, child, pc, gp, halfsib_sets, twins] = pullFamily(tmp_graph, ind)
             sib.add(ind)
             checked = checked.union(sib)
             sibsets.append(sib)
@@ -116,10 +116,23 @@ def checkIfSib(tmp_graph,ind1,ind2):
         return 0
 
 
-def checkIfParent(tmp_graph,all_rel,sibset,ind):
+def checkIfParent(tmp_graph,all_rel,sibset,ind, C):
     #determine if ind is the parent of sibset
     if len(sibset) == 1:
-        return 0
+        if C: #DRUID_C
+            return 0
+        else:
+            sib = list(sibset)[0]
+            if sib < ind:
+                if all_rel[sib][ind][1] < 0.05: #very little IBD2
+                    par = 1 #return 1 to give generic PC categorization to pair later
+                else:
+                    return 0
+            else:
+                if all_rel[ind][sib][1] < 0.05:
+                    par = 1
+                else:
+                    return 0
     else:
         par = 1
         for sib in sibset:
@@ -225,7 +238,7 @@ def checkSiblingSubgraph(tmp_graph,siblings,C):
 def anyIn(list1,list2):
     return [x for x in list1 if x in list2]
 
-def checkForMoveUp(all_rel, ind, sibset, older_gen, third_party):
+def checkForMoveUp(all_rel, ind, sibset, older_gen, possible_par, third_party):
     #check if parent/grandparent is in dataset and is more related to third_party
     if len(older_gen):
         if anyIn(older_gen,third_party):
@@ -250,11 +263,33 @@ def checkForMoveUp(all_rel, ind, sibset, older_gen, third_party):
                         all_par.add(all_rel[tp][par][2])
                 maxpar.append(max(all_par))
 
-        if max(maxpar) > maxsib:
+        if max(maxpar) > maxsib: #there's a parent/grandparent more closely related
             par_use = list(older_gen)[maxpar.index(max(maxpar))]
             return par_use
         else:
-            return ind
+            #check if any possible parents are more closely related
+            for pc in possible_par:
+                for tp in third_party:
+                    if tp < pc:
+                        pcD = all_rel[tp][pc][3]
+                        pcK = all_rel[tp][pc][2]
+                    else:
+                        pcD = all_rel[pc][tp][3]
+                        pcK = all_rel[pc][tp][2]
+                    sibD = []
+                    sibK = []
+                    for sib in sibset:
+                        if tp < sib:
+                            sibD.append(all_rel[tp][sib][3])
+                            sibK.append(all_rel[tp][sib][2])
+                        else:
+                            sibD.append(all_rel[sib][tp][3])
+                            sibK.append(all_rel[sib][tp][2])
+
+                    if all(x > pcD for x in sibD): #all siblings are more distantly related than the possible parent
+                        return pc #use possible parent
+                    elif all(x >= 5 for x in sibD) and pcD <= max(sibD) and 0.9*pcK > max(sibK): #all siblings and the possible parent are >= 5th degree relatives of the possible parent
+                        return pc
     else:
         return ind
 
@@ -264,7 +299,7 @@ def checkAuntUncleGPRelationships(tmp_graph,siblings,par):
     # ensure the siblings of 'par' are listed as aunts/uncles of 'siblings' (par = parent of siblings)
     if par!= []:
         for p in par:
-            [sibpar, avunc_bothsides, nn, parpar, childpar, gppar, halfsib_sets, twins] = pullFamily(tmp_graph, p)
+            [sibpar, avunc_bothsides, nn, parpar, childpar, pc, gppar, halfsib_sets, twins] = pullFamily(tmp_graph, p)
             for sib in siblings:
                 for sp in sibpar:
                     if not tmp_graph.has_edge(sib, sp):
@@ -317,6 +352,7 @@ def pullFamily(tmp_graph,ind):
     halfsibs = set()
     nn = set()
     twins = set()
+    pc = set()
     for edge in edges:
         edge_info = tmp_graph.get_edge_data(edge[0],edge[1])['type']
         if edge[0] == ind:
@@ -337,6 +373,8 @@ def pullFamily(tmp_graph,ind):
                 nn.add(edge[1])
             elif edge_info == 'T':
                 twins.add(edge[1])
+            elif edge_info == 'PC':
+                pc.add(edge[1])
     avunc_sets = []
     tmp=tmp_graph.subgraph(avunc)
     for x in nx.strongly_connected_components(tmp):
@@ -352,4 +390,4 @@ def pullFamily(tmp_graph,ind):
         halfsibs.remove(halfsibs[0])
         halfsib_sets.append(halfsib_set)
 
-    return [sib, avunc_sets, nn, parents, children, grandparents, halfsib_sets, twins]
+    return [sib, avunc_sets, nn, parents, children, pc, grandparents, halfsib_sets, twins]
