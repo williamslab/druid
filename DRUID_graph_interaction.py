@@ -266,7 +266,8 @@ def checkForMoveUp(all_rel, ind, sibset, older_gen, possible_par, third_party):
         if max(maxpar) > maxsib: #there's a parent/grandparent more closely related
             par_use = list(older_gen)[maxpar.index(max(maxpar))]
             return par_use
-        else:
+        #else:
+    if len(possible_par):
             #check if any possible parents are more closely related
             for pc in possible_par:
                 for tp in third_party:
@@ -290,8 +291,9 @@ def checkForMoveUp(all_rel, ind, sibset, older_gen, possible_par, third_party):
                         return pc #use possible parent
                     elif all(x >= 5 for x in sibD) and pcD <= max(sibD) and 0.9*pcK > max(sibK): #all siblings and the possible parent are >= 5th degree relatives of the possible parent
                         return pc
-    else:
-        return ind
+
+
+    return ind
 
 
 
