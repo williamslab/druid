@@ -270,31 +270,38 @@ def checkForMoveUp(all_rel, ind, sibset, older_gen, possible_par, third_party):
         if max(maxpar) > maxsib: #there's a parent/grandparent more closely related
             par_use = list(older_gen)[maxpar.index(max(maxpar))]
             return par_use
-        #else:
-    if len(possible_par):
-            #check if any possible parents are more closely related
-            for pc in possible_par:
-                for tp in third_party:
-                    if tp < pc:
-                        pcD = all_rel[tp][pc][3]
-                        pcK = all_rel[tp][pc][2]
-                    else:
-                        pcD = all_rel[pc][tp][3]
-                        pcK = all_rel[pc][tp][2]
-                    sibD = []
-                    sibK = []
-                    for sib in sibset:
-                        if tp < sib:
-                            sibD.append(all_rel[tp][sib][3])
-                            sibK.append(all_rel[tp][sib][2])
-                        else:
-                            sibD.append(all_rel[sib][tp][3])
-                            sibK.append(all_rel[sib][tp][2])
 
-                    if pcD != 0 and all(x > pcD for x in sibD): #all siblings are more distantly related than the possible parent
-                        return pc #use possible parent
-                    elif all(x >= 5 for x in sibD) and pcD!=0 and pcD <= max(sibD) and 0.9*pcK > max(sibK): #all siblings and the possible parent are >= 5th degree relatives of the possible parent
-                        return pc
+    if len(possible_par):
+        sibset = list(sibset)
+        #check if any possible parents are more closely related
+        for pc in possible_par:
+            pcD = set()
+            pcK = 0
+            sibD = set()
+            sibK = 0
+
+            for tp in third_party:
+                if tp < pc:
+                    pcD.add(all_rel[tp][pc][3])
+                    pcK = pcK + all_rel[tp][pc][2]
+                else:
+                    pcD.add(all_rel[pc][tp][3])
+                    pcK = pcK + all_rel[pc][tp][2]
+
+                for sib in range(0,len(sibset)):
+                    if tp < sibset[sib]:
+                        sibD.add(all_rel[tp][sibset[sib]][3])
+                        sibK = sibK + all_rel[tp][sibset[sib]][2]
+                    else:
+                        sibD.add(all_rel[sibset[sib]][tp][3])
+                        sibK = sibK + all_rel[sibset[sib]][tp][2]
+            pcK = pcK / len(third_party)
+            sibK = sibK / (len(third_party)*len(sibset))
+
+            if all(x != 0 for x in pcD) and (0 in sibD or all([min(pcD) > x for x in sibD])): #all siblings are more distantly related than the possible parent
+                return pc #use possible parent
+            elif all(x >= 5 for x in sibD) and all(x!=0 for x in pcD) and all(x <= max(sibD) for x in pcD) and 0.9*pcK > sibK: #all siblings and the possible parent are >= 5th degree relatives of the possible parent
+                return pc
 
 
     return ind

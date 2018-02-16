@@ -1121,7 +1121,7 @@ def getExpectedPar(num_sibs):
     return exp
 
 
-def combineBothGPsKeepProportionOnlyExpectation(sib1, avunc1, sib2, avunc2, file_for_segments, results_file, rel_graph):
+def combineBothGPsKeepProportionOnlyExpectation(sib1, avunc1, pc1, sib2, avunc2, pc2, file_for_segments, results_file, rel_graph):
 # perform ancestral genome reconstruction between two groups of related individuals (sib1+avunc1 and sib2+avunc2)
 # infers relatedness between all individuals within the two groups
     if len(sib1) == 1 and len(sib2) == 1 and len(avunc1) == 0 and len(avunc2) == 0:
@@ -1289,6 +1289,21 @@ def combineBothGPsKeepProportionOnlyExpectation(sib1, avunc1, sib2, avunc2, file
                 to_add = [sib_rel, avunc, estimated_out_exp, refined]
                 result.append(to_add)
 
+            for p1 in pc1:
+                if rel_graph.has_edge(sib_rel, p1):
+                    estimated_out_exp = rel_graph.get_edge_data(sib_rel,p1)['type']
+                else:
+                    if estimated_exp != 0:
+                        estimated_out_exp = estimated_exp + 1
+                    else:
+                        estimated_out_exp = 0
+                if sib_rel < p1:
+                    refined = all_rel[sib_rel][p1][3]
+                else:
+                    refined = all_rel[p1][sib_rel][3]
+                to_add = [sib_rel, p1, estimated_out_exp, refined]
+                result.append(to_add)
+
         for avunc_rel in avunc2:
             for sib in sib1:
                 if rel_graph.has_edge(avunc_rel, sib):
@@ -1320,6 +1335,36 @@ def combineBothGPsKeepProportionOnlyExpectation(sib1, avunc1, sib2, avunc2, file
                 to_add = [avunc, avunc_rel, estimated_out_exp, refined]
                 result.append(to_add)
 
+            for p1 in pc1:
+                if rel_graph.has_edge(sib_rel, p1):
+                    estimated_out_exp = rel_graph.get_edge_data(sib_rel,p1)['type']
+                else:
+                    if estimated_exp != 0:
+                        estimated_out_exp = estimated_exp + 1
+                    else:
+                        estimated_out_exp = 0
+                if avunc_rel < p1:
+                    refined = all_rel[avunc_rel][p1][3]
+                else:
+                    refined = all_rel[p1][avunc_rel][3]
+                to_add = [avunc_rel, p1, estimated_out_exp, refined]
+                result.append(to_add)
+
+        for p1 in pc1:
+            for p2 in pc2:
+                if rel_graph.has_edge(p1, p2):
+                    estimated_out_exp = rel_graph.get_edge_data(p1, p2)['type']
+                else:
+                    if estimated_exp != 0:
+                        estimated_out_exp = estimated_exp + 2
+                    else:
+                        estimated_out_exp = 0
+                if p1 < p2:
+                    refined = all_rel[p1][p2][3]
+                else:
+                    refined = all_rel[p2][p1][3]
+                to_add = [p1, p2, estimated_out_exp, refined]
+                result.append(to_add)
 
     return result
 
@@ -1766,9 +1811,10 @@ def runDRUID(rel_graph, all_rel, inds, args):
     all_results = []
     checked = []
     for [ind1,ind2] in itertools.combinations(inds,2): #test each pair of individuals
-        if not [ind1,ind2] in checked and not [ind2,ind1] in checked: #if pair not yet tested
+        if not [ind1,ind2] in checked and [ind2,ind1] not in checked: #if pair not yet tested
             print("Comparing "+ind1+" and "+ind2+"\n")
             results = []
+            #if the pair is already connected via graph, output that relationship
             if rel_graph.has_edge(ind1, ind2):
                 checked.append([ind1,ind2])
                 if ind1 < ind2:
@@ -1863,11 +1909,7 @@ def runDRUID(rel_graph, all_rel, inds, args):
                                 [sib2, avunc2_bothsides, nn2, par2, child2, pc2, gp2, halfsib2_sets, twins2] = pullFamily(rel_graph, ind2)
                                 sib2.add(ind2)
                                 [relavunc1, relavunc2, unused1, unused2] = checkRelevantAuntsUncles(sib1, sib2, avunc1_bothsides, avunc2_bothsides, par1, par2)
-                            # add these sibsets to checked
-                            for i1 in sib1:
-                                for i2 in sib2:
-                                    checked.append([i1, i2])
-                                    checked.append([i2, i1])
+
                             if len(unused1):
                                 unused_check = []
                                 for i1 in unused1:
@@ -1875,7 +1917,7 @@ def runDRUID(rel_graph, all_rel, inds, args):
                                         [sib1u, avunc1u_bothsides, nn1u, par1u, child1u, pc1u, gp1u, halfsib1u_sets, twins1u] = pullFamily(rel_graph, i1)
                                         sib1u.add(i1)
                                         unused_check = unused_check + sib1u
-                                        results = results + combineBothGPsKeepProportionOnlyExpectation(sib1u, [], sib2, [], args.s[0], args.i[0], rel_graph)
+                                        results = results + combineBothGPsKeepProportionOnlyExpectation(sib1u, [], pc1, sib2, [], pc2, args.s[0], args.i[0], rel_graph)
                             if len(unused2):
                                 unused_check = []
                                 for i2 in unused2:
@@ -1883,23 +1925,13 @@ def runDRUID(rel_graph, all_rel, inds, args):
                                         [sib2u, avunc2u_bothsides, nn2u, par2u, child2u, pc1u, gp2u, halfsib2u_sets, twins2u] = pullFamily(rel_graph, i2)
                                         sib2u.add(ind2)
                                         unused_check = unused_check + sib2u
-                                        results = results + combineBothGPsKeepProportionOnlyExpectation(sib1, [], sib2u, [], args.s[0], args.i[0], rel_graph)
+                                        results = results + combineBothGPsKeepProportionOnlyExpectation(sib1, [], pc1, sib2u, [], pc2, args.s[0], args.i[0], rel_graph)
 
                         else:
                             relavunc1 = []
                             relavunc2 = []
-                        for av1 in relavunc1:
-                            for av2 in relavunc2:
-                                checked.append([av1,av2])
-                                checked.append([av2,av1])
-                            for s2 in sib2:
-                                checked.append([av1,s2])
-                                checked.append([s2,av1])
-                        for av2 in relavunc2:
-                            for s1 in sib1:
-                                checked.append([av2,s1])
-                                checked.append([s1,av2])
-                        results = results + combineBothGPsKeepProportionOnlyExpectation(sib1, relavunc1, sib2, relavunc2, args.s[0], args.i[0], rel_graph)
+
+                        results = results + combineBothGPsKeepProportionOnlyExpectation(sib1, relavunc1, pc1, sib2, relavunc2, pc2, args.s[0], args.i[0], rel_graph)
                         if ind1_original != ind1 or ind2_original != ind2:
                             for res in results:
                                 if (res[0] == ind1 and res[1] == ind2) or (res[0] == ind2 and res[1] == ind1):
@@ -1914,7 +1946,7 @@ def runDRUID(rel_graph, all_rel, inds, args):
                         else: #siblings
                             closest_result = [ind1,ind2,1]
 
-                    if ind1_original != ind1 or ind2_original != ind2:
+                    elif ind1_original != ind1 or ind2_original != ind2: #if we've travelled through the graph
                         for ii in range(len(moves1)-1,-1,-1):
                             if moves1[ii] in ['P','C']:
                                 total = total + 1
@@ -1933,6 +1965,9 @@ def runDRUID(rel_graph, all_rel, inds, args):
                             hs1 = checkUseHalfsibs(sib1, halfsib1_sets, ind2, all_rel)
                             for h1 in hs1:
                                 results.append([h1,ind2,total,refined, 'graph+inferred'])
+                            for p in pc1:
+                                if not p in moves_inds1:  # if we didn't travel through this relationship already
+                                    results.append([p,ind2,total,'graph+inferred'])
 
                         total = int(closest_result[2])
                         for ii in range(len(moves2)-1,-1,-1):
@@ -1953,6 +1988,9 @@ def runDRUID(rel_graph, all_rel, inds, args):
                             hs2 = checkUseHalfsibs(sib2, halfsib2_sets, ind1, all_rel)
                             for h2 in hs2:
                                 results.append([ind1,h2,total,refined,'graph+inferred'])
+                            for p in pc2:
+                                if not p in moves_inds2: #if we didn't travel through this relationship already
+                                    results.append([ind1, p, total+1, 'graph+inferred'])
 
                         if len(moves1) and len(moves2):
                             total = int(closest_result[2])
@@ -1993,6 +2031,11 @@ def runDRUID(rel_graph, all_rel, inds, args):
                                         results.append([ind1, h2, total, refined, 'graph+inferred'])
                                         for h1 in hs1:
                                             results.append([h1,h2,total,refined, 'graph+inferred'])
+
+                    # add pairs with results to be output to checked list
+                    for av1 in list(sib1) + list(relavunc1) + list(pc1):
+                        for av2 in list(sib2) + list(relavunc2) + list(pc2):
+                            checked.append([av1, av2])
 
                 if len(twins1):
                     for res in results:
