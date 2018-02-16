@@ -287,9 +287,9 @@ def checkForMoveUp(all_rel, ind, sibset, older_gen, possible_par, third_party):
                             sibD.append(all_rel[sib][tp][3])
                             sibK.append(all_rel[sib][tp][2])
 
-                    if all(x > pcD for x in sibD): #all siblings are more distantly related than the possible parent
+                    if pcD != 0 and all(x > pcD for x in sibD): #all siblings are more distantly related than the possible parent
                         return pc #use possible parent
-                    elif all(x >= 5 for x in sibD) and pcD <= max(sibD) and 0.9*pcK > max(sibK): #all siblings and the possible parent are >= 5th degree relatives of the possible parent
+                    elif all(x >= 5 for x in sibD) and pcD!=0 and pcD <= max(sibD) and 0.9*pcK > max(sibK): #all siblings and the possible parent are >= 5th degree relatives of the possible parent
                         return pc
 
 
