@@ -41,7 +41,8 @@ def getRelationship(tmp_graph,ind1,ind2):
                         type2 = tmp_graph.get_edge_data(indsecond,indthird)['type']
                     else:
                         type2 = -1
-                    if (type1 == 'P' and type2 == 'C') or (type1 == 'GP' and type2 == 'GC') or (type1 == 'P' and type2 == 'GC') or (type1 == 'GP' and type2 == 'C') or (type1 == 'C' and type2 == 'P') or (type1 == 'GC' and type2 == 'GP') or (type1 == 'C' and type2 == 'GP') or (type1 == 'GC' and type2 == 'P') or (type1 == 'C' and type2 == 'AU') or (type1 == 'GC' and type2 == 'AU') or (type1 == 'P' and type2 == 'NN') or (type1 == 'GP' and type2 == 'NN'): #traveling to other lineage, stop
+                    # if traveling to other lineage, stop
+                    if (type1 == 'P' and type2 == 'C') or (type1 == 'GP' and type2 == 'GC') or (type1 == 'P' and type2 == 'GC') or (type1 == 'GP' and type2 == 'C') or (type1 == 'C' and type2 == 'P') or (type1 == 'GC' and type2 == 'GP') or (type1 == 'C' and type2 == 'GP') or (type1 == 'GC' and type2 == 'P') or (type1 == 'C' and type2 == 'AU') or (type1 == 'GC' and type2 == 'AU') or (type1 == 'P' and type2 == 'NN') or (type1 == 'GP' and type2 == 'NN'):
                         total = -1
                         i = len(path) + 1
                     elif (type1 == 'AU' and type2 == 'C'):
@@ -51,6 +52,9 @@ def getRelationship(tmp_graph,ind1,ind2):
                         total = -1
                         i = len(path) + 1
                     elif type1 in ['FS','P','C']:
+                        total = total + 1
+                        i = i + 1
+                    elif type1 == 'PC': #added 2/16/18
                         total = total + 1
                         i = i + 1
                     elif type1 == 'NN':
