@@ -242,12 +242,6 @@ def checkSiblingSubgraph(tmp_graph,siblings,C):
 def anyIn(list1,list2):
     return [x for x in list1 if x in list2]
 
-def mean(nums):
-    return sum(nums)/len(nums)
-
-def thresholdK(pcD):
-    return 0.9-0.02*mean(pcD)
-
 def checkForMoveUp(all_rel, ind, sibset, older_gen, possible_par, third_party):
     #check if parent/grandparent is in dataset and is more related to third_party
     if len(older_gen):
@@ -278,49 +272,37 @@ def checkForMoveUp(all_rel, ind, sibset, older_gen, possible_par, third_party):
             return par_use
 
     if len(possible_par):
-        if anyIn(possible_par,third_party):
-            return 'same'
-        else:
-            sibset = list(sibset)
-            #check if any possible parents are more closely related
-            pc_possible_return = []
-            pc_possible_return_K = []
-            for pc in possible_par:
-                pcD = set()
-                pcK = 0
-                sibD = set()
-                sibK = 0
+        sibset = list(sibset)
+        #check if any possible parents are more closely related
+        for pc in possible_par:
+            pcD = set()
+            pcK = 0
+            sibD = set()
+            sibK = 0
 
-                for tp in third_party:
-                    if tp < pc:
-                        pcD.add(all_rel[tp][pc][3])
-                        pcK = pcK + all_rel[tp][pc][2]
+            for tp in third_party:
+                if tp < pc:
+                    pcD.add(all_rel[tp][pc][3])
+                    pcK = pcK + all_rel[tp][pc][2]
+                else:
+                    pcD.add(all_rel[pc][tp][3])
+                    pcK = pcK + all_rel[pc][tp][2]
+
+                for sib in range(0,len(sibset)):
+                    if tp < sibset[sib]:
+                        sibD.add(all_rel[tp][sibset[sib]][3])
+                        sibK = sibK + all_rel[tp][sibset[sib]][2]
                     else:
-                        pcD.add(all_rel[pc][tp][3])
-                        pcK = pcK + all_rel[pc][tp][2]
+                        sibD.add(all_rel[sibset[sib]][tp][3])
+                        sibK = sibK + all_rel[sibset[sib]][tp][2]
+            pcK = pcK / len(third_party)
+            sibK = sibK / (len(third_party)*len(sibset))
 
-                    for sib in range(0,len(sibset)):
-                        if tp < sibset[sib]:
-                            sibD.add(all_rel[tp][sibset[sib]][3])
-                            sibK = sibK + all_rel[tp][sibset[sib]][2]
-                        else:
-                            sibD.add(all_rel[sibset[sib]][tp][3])
-                            sibK = sibK + all_rel[sibset[sib]][tp][2]
-                pcK = pcK / len(third_party)
-                sibK = sibK / (len(third_party)*len(sibset))
+            if all(x != 0 for x in pcD) and (0 in sibD or all([min(pcD) > x for x in sibD])): #all siblings are more distantly related than the possible parent
+                return pc #use possible parent
+            elif all(x >= 5 for x in sibD) and all(x!=0 for x in pcD) and all(x <= max(sibD) for x in pcD) and 0.9*pcK > sibK: #all siblings and the possible parent are >= 5th degree relatives of the possible parent
+                return pc
 
-                if all(x != 0 for x in pcD) and (0 in sibD or all([min(pcD) < x for x in sibD])): #all siblings are more distantly related than the possible parent
-                    pc_possible_return.append(pc) #use possible parent
-                    pc_possible_return_K.append(pcK)
-                elif all(x >= 5 for x in sibD) and all(x!=0 for x in pcD) and all(x <= max(sibD) for x in pcD) and thresholdK(pcD)*pcK > sibK: #all siblings and the possible parent are >= 5th degree relatives of the possible parent
-                    pc_possible_return.append(pc)
-                    pc_possible_return_K.append(pcK)
-
-
-            if len(pc_possible_return) == 1:
-                return pc_possible_return[0]
-            elif len(pc_possible_return):
-                return pc_possible_return[pc_possible_return_K.index(max(pc_possible_return_K))] #use PC with largest K
 
     return ind
 
