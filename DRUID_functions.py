@@ -66,17 +66,15 @@ def inferFirst(rel_graph,all_rel, first, second, C):
 
     # ensure subgraphs of siblings are connected
     checked = set()
+    sibsets = [] #collect list of sets of siblings
     for node in rel_graph.nodes():
         if not node in checked:
             siblings = getSibsFromGraph(rel_graph,node)
             siblings.add(node)
-            for sib in siblings:
-                checked.add(sib)
+
             # get sibs to add to subgraph, and individuals to remove from sibling subgraph
             [add_sibs,remove] = checkSiblingSubgraph(rel_graph,siblings.copy(),C) #edit siblings list, return removed sibs
 
-            for sib in add_sibs:
-                checked.add(sib)
 
             # remove the individuals no longer believed to be siblings
             for ind in remove:
@@ -87,7 +85,7 @@ def inferFirst(rel_graph,all_rel, first, second, C):
                 if ind in siblings:
                     siblings.remove(ind)
 
-
+            # add in missing siblings
             for [ind1,ind2] in itertools.combinations(add_sibs, 2):
                 if not rel_graph.has_edge(ind1,ind2):
                     rel_graph.add_edge(ind1, ind2)
@@ -95,40 +93,55 @@ def inferFirst(rel_graph,all_rel, first, second, C):
                 rel_graph[ind1][ind2]['type'] = 'FS'
                 rel_graph[ind2][ind1]['type'] = 'FS'
 
+            #get updated set of siblings, add to checked list
+            siblings = getSibsFromGraph(rel_graph,node)
+            siblings.add(node)
+
+            for sib in siblings:
+                checked.add(sib)
+
+            sibsets.append(siblings)
 
 
+            #now that sibling set is completed, look for parents
+            #find neighbors of first sibling set labeled as '1'
+            inds_to_check = set()
+            for sib in siblings:
+                neighbors = rel_graph.neighbors(sib)
+                for sib_neighbor in neighbors:
+                    if rel_graph.get_edge_data(sib,sib_neighbor)['type'] == '1U':
+                        inds_to_check.add(sib_neighbor)
 
-            if len(siblings):
-                #now that sibling set is completed, look for parents
-                #find neighbors of first sibling set labeled as '1'
-                neighbors = rel_graph.neighbors(list(siblings)[0])
-                inds_to_check = set()
-                for n in neighbors:
-                    if rel_graph.get_edge_data(list(siblings)[0],n)['type'] == '1U':
-                        inds_to_check.add(n)
 
-                #check if other siblings also have this neighbor and are labeled as '1'
-                par = set()
-                pc = []
-                if len(inds_to_check):
-                    for ind in inds_to_check:
-                        if checkIfParent(rel_graph, all_rel, siblings, ind, C):
-                            if len(siblings) == 1: #only 1 child, give the pair generic PC label
-                                pc.append([list(siblings)[0],ind])
-                            else:
+            #check if other siblings also have this neighbor and are labeled as '1'
+            par = set()
+            pc = []
+            if len(inds_to_check):
+                for ind in inds_to_check:
+                    if checkIfParent(rel_graph, all_rel, siblings, ind, C):
+                        if len(siblings) == 1: #only 1 parent or child, give the pair generic PC label
+                            siblings_pc = getSibsFromGraph(rel_graph, ind)
+                            if len(siblings_pc): #if the other individual has siblings, then the individual in "siblings" must be the child of "ind"
                                 par.add(ind)
+                            else:
+                                pc.append([list(siblings)[0],ind])
+                        else:
+                            par.add(ind)
 
-                for ind in par:
-                    for sib in siblings:
-                        if not rel_graph.has_edge(ind,sib):
-                            rel_graph.add_edge(ind, sib)
-                            rel_graph.add_edge(sib, ind)
-                        rel_graph[ind][sib]['type'] = 'P'
-                        rel_graph[sib][ind]['type'] = 'C'
+            for ind in par:
+                for sib in siblings:
+                    if not rel_graph.has_edge(ind,sib):
+                        rel_graph.add_edge(ind, sib)
+                        rel_graph.add_edge(sib, ind)
+                    rel_graph[ind][sib]['type'] = 'P'
+                    rel_graph[sib][ind]['type'] = 'C'
 
-                for [ind1,ind2] in pc:
-                    rel_graph[ind1][ind2]['type'] = 'PC'
-                    rel_graph[ind2][ind1]['type'] = 'PC'
+            for [ind1,ind2] in pc:
+                rel_graph[ind1][ind2]['type'] = 'PC'
+                rel_graph[ind2][ind1]['type'] = 'PC'
+
+
+
 
 
 
@@ -1508,7 +1521,8 @@ def getAllRel(results_file, inds_file):
         file = open(inds_file,'r')
         for line in file:
             l = str.split(line.rstrip())
-            inds.append(l[0])
+            if len(l):
+                inds.append(l[0])
 
         file.close()
 
@@ -1847,7 +1861,7 @@ def runDRUID(rel_graph, all_rel, inds, args):
                 else: #no path between individuals
                     #check if ind1 has parents/grandparents more closely related to other set of individuals
                     ind1_original = ind1
-                    ind1_new = checkForMoveUp(all_rel,ind1, sib1, par1.union(gp1), pc1, sib2)
+                    ind1_new = checkForMoveUpTEST(all_rel,ind1, sib1, par1.union(gp1), pc1, sib2, args.o[0]+'.TEST')
                     moves1 = []
                     moves_inds1 = []
                     if ind1_new == 'same': #shouldn't happen, but just in case
@@ -1859,7 +1873,7 @@ def runDRUID(rel_graph, all_rel, inds, args):
                         ind1 = ind1_new
                         [sib1, avunc1_bothsides, nn1, par1, child1, pc1, gp1, halfsib1_sets, twins1] = pullFamily(rel_graph, ind1)
                         sib1.add(ind1)
-                        ind1_new = checkForMoveUp(all_rel,ind1, sib1, gp1.union(par1), pc1, sib2)
+                        ind1_new = checkForMoveUpTEST(all_rel,ind1, sib1, gp1.union(par1), pc1, sib2, args.o[0]+'.TEST')
 
                     if ind1_new == 'same':
                         same = anyIn(gp1.union(par1), sib2)
@@ -1871,7 +1885,7 @@ def runDRUID(rel_graph, all_rel, inds, args):
                     else:
                         # check if ind2 has parents/grandparentsmore closely related to other set of individuals
                         ind2_original = ind2
-                        ind2_new = checkForMoveUp(all_rel,ind2,sib2,gp2.union(par2), pc2, sib1)
+                        ind2_new = checkForMoveUpTEST(all_rel,ind2,sib2,gp2.union(par2), pc2, sib1, args.o[0]+'.TEST')
                         moves2 = []
                         moves_inds2 = []
                         if ind2_new == 'same':
@@ -1883,7 +1897,7 @@ def runDRUID(rel_graph, all_rel, inds, args):
                             ind2 = ind2_new
                             [sib2, avunc2_bothsides, nn2, par2, child2, pc2, gp2, halfsib2_sets, twins2] = pullFamily(rel_graph, ind2)
                             sib2.add(ind2)
-                            ind2_new = checkForMoveUp(all_rel,ind2, sib2, gp2.union(par2), pc2, sib1)
+                            ind2_new = checkForMoveUpTEST(all_rel,ind2, sib2, gp2.union(par2), pc2, sib1, args.o[0]+'.TEST')
 
                         if ind2_new == 'same':
                             same = anyIn(gp2.union(par2), sib1)

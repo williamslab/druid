@@ -27,6 +27,9 @@ parser.add_argument('-C', type=int, nargs=1, default=[0], help='Whether to run D
 args=parser.parse_args()
 
 inds = []
+outfile = args.o[0]+'.TEST'
+out = open(outfile,'w+')
+out.close()
 
 print("Using IBD12 file: "+args.i[0])
 print("Using map file: "+args.m[0])

@@ -120,6 +120,15 @@ def checkIfSib(tmp_graph,ind1,ind2):
         return 0
 
 
+def checkIfParentInGraph(tmp_graph,ind1,ind2):
+    #determine whether there's an edge labeled 'FS' between ind1 and ind2
+    type = tmp_graph.get_edge_data(ind1,ind2)['type']
+    if type == 'P':
+        return 1
+    else:
+        return 0
+
+
 def checkIfParent(tmp_graph,all_rel,sibset,ind, C):
     #determine if ind is the parent of sibset
     if len(sibset) == 1:
@@ -162,6 +171,15 @@ def getSibsFromGraph(tmp_graph,ind):
                 sibs.add(x)
     return sibs
 
+def getParent(tmp_graph,ind):
+    par = set()
+    if ind in tmp_graph:
+        neighbors = tmp_graph.neighbors(ind)
+        for x in neighbors:
+            if checkIfParentInGraph(tmp_graph,ind,x):
+                par.add(x)
+
+    return par
 
 
 def getSibsAndHalfSibsFromGraph(tmp_graph,ind):
@@ -312,7 +330,7 @@ def checkForMoveUp(all_rel, ind, sibset, older_gen, possible_par, third_party):
                 if all(x != 0 for x in pcD) and (0 in sibD or all([min(pcD) < x for x in sibD])): #all siblings are more distantly related than the possible parent
                     pc_possible_return.append(pc) #use possible parent
                     pc_possible_return_K.append(pcK)
-                elif all(x >= 5 for x in sibD) and all(x!=0 for x in pcD) and all(x <= max(sibD) for x in pcD) and thresholdK(pcD)*pcK > sibK: #all siblings and the possible parent are >= 5th degree relatives of the possible parent
+                elif all(x >= 5 or x == 0 for x in sibD) and all(x!=0 for x in pcD) and all(x <= max(sibD) for x in pcD) and thresholdK(pcD)*pcK > sibK: #all siblings and the possible parent are >= 5th degree relatives of the possible parent
                     pc_possible_return.append(pc)
                     pc_possible_return_K.append(pcK)
 
@@ -324,6 +342,93 @@ def checkForMoveUp(all_rel, ind, sibset, older_gen, possible_par, third_party):
 
     return ind
 
+
+def checkForMoveUpTEST(all_rel, ind, sibset, older_gen, possible_par, third_party, outfile):
+    # check if parent/grandparent is in dataset and is more related to third_party
+    if len(older_gen):
+        if anyIn(older_gen, third_party):
+            return 'same'
+        else:
+            all_sib = set()
+            for sib in sibset:
+                for tp in third_party:
+                    if sib < tp:
+                        all_sib.add(all_rel[sib][tp][2])
+                    else:
+                        all_sib.add(all_rel[tp][sib][2])
+            maxsib = max(all_sib)
+
+            maxpar = []
+            for par in older_gen:
+                all_par = set()
+                for tp in third_party:
+                    if par < tp:
+                        all_par.add(all_rel[par][tp][2])
+                    else:
+                        all_par.add(all_rel[tp][par][2])
+                maxpar.append(max(all_par))
+
+        par_use = list(older_gen)[maxpar.index(max(maxpar))]
+        out = open(outfile, 'a')
+
+        if max(maxpar) > maxsib:  # there's a parent/grandparent more closely related
+            out.write(ind + '\t' + str(maxsib) + '\t' + par_use + '\t' + str(max(maxpar)) + '\tP1\n')
+            out.close()
+            return par_use
+        else:
+            out.write(ind + '\t' + str(maxsib) + '\t' + par_use + '\t' + str(max(maxpar)) + '\tP0\n')
+            out.close()
+
+    if len(possible_par):
+        if anyIn(possible_par, third_party):
+            return 'same'
+        else:
+            sibset = list(sibset)
+            # check if any possible parents are more closely related
+            pc_possible_return = []
+            pc_possible_return_K = []
+            for pc in possible_par:
+                pcD = set()
+                pcK = 0
+                indD = set()
+                indK = 0
+
+                for tp in third_party:
+                    if tp < pc:
+                        pcD.add(all_rel[tp][pc][3])
+                        pcK = pcK + all_rel[tp][pc][2]
+                    else:
+                        pcD.add(all_rel[pc][tp][3])
+                        pcK = pcK + all_rel[pc][tp][2]
+                    if tp < ind:
+                        indD.add(all_rel[tp][ind][3])
+                        indK = indK + all_rel[tp][ind][2]
+                    else:
+                        indD.add(all_rel[ind][tp][3])
+                        indK = indK + all_rel[ind][tp][2]
+                pcK = pcK / len(third_party)
+                indK = indK / len(third_party)
+
+                out = open(outfile, 'a')
+                if all(x != 0 for x in pcD) and (0 in indD or all([min(pcD) < x for x in indD])):  # current individual is more distantly related than the possible parent
+                    out.write(ind + '\t' + str(indK) + '\t' + pc + '\t' + str(pcK) + '\tD\n')
+                    pc_possible_return.append(pc)  # use possible parent
+                    pc_possible_return_K.append(pcK)
+                elif all(x >= 5 or x == 0 for x in indD) and all(x != 0 for x in pcD) and all(x <= max(indD) for x in pcD) and thresholdK(pcD) * pcK > indK:  # all siblings and the possible parent are >= 5th degree relatives of the possible parent
+                    out.write(ind + '\t' + str(indK) + '\t' + pc + '\t' + str(pcK) + '\tK\n')
+                    pc_possible_return.append(pc)
+                    pc_possible_return_K.append(pcK)
+                else:
+                    out.write(ind + '\t' + str(indK) + '\t' + pc + '\t' + str(pcK) + '\t0\n')
+                out.close()
+
+
+            if len(pc_possible_return) == 1:
+                return pc_possible_return[0]
+            elif len(pc_possible_return):
+                return pc_possible_return[pc_possible_return_K.index(max(pc_possible_return_K))]  # use PC with largest K
+
+    return ind
 
 
 def checkAuntUncleGPRelationships(tmp_graph,siblings,par):
