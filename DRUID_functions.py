@@ -141,6 +141,15 @@ def inferFirst(rel_graph,all_rel, first, second, C):
                 rel_graph[ind2][ind1]['type'] = 'PC'
 
 
+    # compare inferred graph to provided graph
+    for edge in rel_graph.edges():
+        if not edge in rel_graph_tmp.edges() or not rel_graph.get_edge_data(edge[0], edge[1])['type'] == rel_graph_tmp.get_edge_data(edge[0], edge[1])['type']:
+            print("Warning: Unable to confirm " + edge[0] + " and " + edge[1] + " as " + str(rel_graph.get_edge_data(edge[0], edge[1])['type']) + " but including as such")
+
+    for edge in rel_graph_tmp.edges():
+        if not edge in rel_graph.edges():
+            rel_graph.add_edge(edge[0], edge[1])
+            rel_graph[edge[0]][edge[1]]['type'] = rel_graph_tmp.get_edge_data(edge[0], edge[1])['type']
 
 
 
@@ -1861,7 +1870,7 @@ def runDRUID(rel_graph, all_rel, inds, args):
                 else: #no path between individuals
                     #check if ind1 has parents/grandparents more closely related to other set of individuals
                     ind1_original = ind1
-                    ind1_new = checkForMoveUpTEST(all_rel,ind1, sib1, par1.union(gp1), pc1, sib2, args.o[0]+'.TEST')
+                    ind1_new = checkForMoveUp(all_rel,ind1, sib1, par1.union(gp1), pc1, sib2)
                     moves1 = []
                     moves_inds1 = []
                     if ind1_new == 'same': #shouldn't happen, but just in case
@@ -1873,7 +1882,7 @@ def runDRUID(rel_graph, all_rel, inds, args):
                         ind1 = ind1_new
                         [sib1, avunc1_bothsides, nn1, par1, child1, pc1, gp1, halfsib1_sets, twins1] = pullFamily(rel_graph, ind1)
                         sib1.add(ind1)
-                        ind1_new = checkForMoveUpTEST(all_rel,ind1, sib1, gp1.union(par1), pc1, sib2, args.o[0]+'.TEST')
+                        ind1_new = checkForMoveUp(all_rel,ind1, sib1, gp1.union(par1), pc1, sib2)
 
                     if ind1_new == 'same':
                         same = anyIn(gp1.union(par1), sib2)
@@ -1885,7 +1894,7 @@ def runDRUID(rel_graph, all_rel, inds, args):
                     else:
                         # check if ind2 has parents/grandparentsmore closely related to other set of individuals
                         ind2_original = ind2
-                        ind2_new = checkForMoveUpTEST(all_rel,ind2,sib2,gp2.union(par2), pc2, sib1, args.o[0]+'.TEST')
+                        ind2_new = checkForMoveUp(all_rel,ind2,sib2,gp2.union(par2), pc2, sib1)
                         moves2 = []
                         moves_inds2 = []
                         if ind2_new == 'same':
@@ -1897,7 +1906,7 @@ def runDRUID(rel_graph, all_rel, inds, args):
                             ind2 = ind2_new
                             [sib2, avunc2_bothsides, nn2, par2, child2, pc2, gp2, halfsib2_sets, twins2] = pullFamily(rel_graph, ind2)
                             sib2.add(ind2)
-                            ind2_new = checkForMoveUpTEST(all_rel,ind2, sib2, gp2.union(par2), pc2, sib1, args.o[0]+'.TEST')
+                            ind2_new = checkForMoveUp(all_rel,ind2, sib2, gp2.union(par2), pc2, sib1)
 
                         if ind2_new == 'same':
                             same = anyIn(gp2.union(par2), sib1)
