@@ -39,7 +39,7 @@ if args.u[0] != '':
 # Get map info
 global total_genome, chrom_starts, chrom_ends
 [total_genome, chrom_starts, chrom_ends] = getChrInfo(args.m[0])
-print("Genome length: " + str(total_genome))
+print("Genome length: " + str(total_genome)+'\n')
 
 # Get IBD1/2 info
 [all_rel,inds,first,second,third] = getAllRel(args.i[0],args.u[0])
@@ -47,27 +47,19 @@ print("Total number of individuals: " + str(len(inds)))
 
 #make graph
 rel_graph = nx.DiGraph()
+rel_graph_tmp = nx.DiGraph()
 if args.f[0] != '':
     print("Reading in family info")
     faminfo = getFamInfo(args.f[0], inds)
-    forceFamInfo(rel_graph,inds, faminfo)
+    forceFamInfo(rel_graph_tmp, faminfo) #store relationship information in rel_graph_tmp
 
-    print("Inferring first degree relatives")
-    inferFirstFaminfo(rel_graph, all_rel, first, second, int(args.C[0]))
+print("\nInferring first degree relatives")
+inferFirst(rel_graph, rel_graph_tmp, all_rel, first, second, int(args.C[0]))
 
-    # infer second degree & aunts/uncles of sibling sets
-    print("Inferring second degree relatives")
-    inferSecondPath(rel_graph, all_rel, second, third, args.s[0], args.o[0], int(args.C[0]))
-else:
-    # infer and add siblings, parents; other first degrees are labeled as '1'
-    print("Inferring first degree relatives")
-    inferFirst(rel_graph, all_rel, first, second, int(args.C[0]))
-
-    # infer second degree & aunts/uncles of sibling sets
-    print("Inferring second degree relatives")
-
-    inferSecondPath(rel_graph, all_rel, second, third, args.s[0], args.o[0], int(args.C[0]))
-
+# infer second degree & aunts/uncles of sibling sets
+print("\nInferring second degree relatives")
+inferSecondPath(rel_graph, all_rel, second, third, args.s[0], args.o[0], int(args.C[0]))
+print('\n')
 
 
 all_results = runDRUID(rel_graph, all_rel, inds, args)

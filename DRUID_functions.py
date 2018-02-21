@@ -14,7 +14,7 @@ global total_genome
 
 degrees = {'MZ': 1/2.0**(3.0/2), 1: 1/2.0**(5.0/2), 2: 1/2.0**(7.0/2), 3: 1/2.0**(9.0/2), 4: 1/2.0**(11.0/2), 5: 1/2.0**(13.0/2), 6: 1/2.0**(15.0/2), 7: 1/2.0**(17.0/2), 8: 1/2.0**(19.0/2), 9: 1/2.0**(21.0/2), 10: 1/2.0**(23.0/2), 11: 1/2.0**(25.0/2), 12: 1/2.0**(27/2.0), 13: 1/2.0**(29.0/2)}  # threshold values for each degree of relatedness
 
-def forceFamInfo(rel_graph,inds, faminfo):
+def forceFamInfo(rel_graph, faminfo):
     #force the provided faminfo file information into rel_graph
     for i1 in faminfo.keys():
         for i2 in faminfo[i1].keys():
@@ -22,47 +22,28 @@ def forceFamInfo(rel_graph,inds, faminfo):
             rel_graph[i1][i2]['type'] = faminfo[i1][i2]
 
 
-def inferFirst(rel_graph,all_rel, first, second, C):
+def inferFirst(rel_graph, rel_graph_tmp, all_rel, first, second, C):
     #build graphs using first degree relative inferences
-    for [ind1,ind2] in first+second: #iterate through currently inferred first and second degree pairs
-        if ind1 < ind2:
-            i1 = ind1
-            i2 = ind2
-        else:
-            i1 = ind2
-            i2 = ind1
-        if i1 in all_rel.keys() and i2 in all_rel[i1].keys():
-            # all_rel: IBD1, IBD2, K, D
-            if all_rel[i1][i2][1] > 1/2.0**(5/2.0): #if IBD2 meets minimum threshold
-                rel_graph.add_edge(i1,i2)
-                rel_graph.add_edge(i2,i1)
-                if all_rel[i1][i2][2] < 1/2.0**(3/2.0):
-                    rel_graph[i1][i2]['type'] = 'FS'
-                    rel_graph[i2][i1]['type'] = 'FS'
-                else:
-                    rel_graph[i1][i2]['type'] = 'T' #twin
-                    rel_graph[i2][i1]['type'] = 'T'
+    for [i1,i2] in first+second: #iterate through currently inferred first and second degree pairs
+        # all_rel: IBD1, IBD2, K, D
+        if all_rel[i1][i2][1] > 1/2.0**(5/2.0): #if IBD2 meets minimum threshold
+            if all_rel[i1][i2][2] < 1/2.0**(3/2.0):
+                addEdgeType(i1, i2, 'FS', 'FS', rel_graph)
+            else: #twin
+                addEdgeType(i1, i2, 'T', 'T', rel_graph)
 
-            elif all_rel[i1][i2][1] > 1/2.0**(7/2.0):
-                rel_graph.add_edge(i1,i2)
-                rel_graph.add_edge(i2,i1)
-                if not C and all_rel[i1][i2][1] > 1/2.0**(11/4.0): #DRUID, IBD2 > 1/2**(11/4)
-                    print("Warning: "+i1+' and '+i2+' have low levels of IBD2 for siblings, may be 3/4 sibs')
-                    rel_graph[i1][i2]['type'] = 'FS'
-                    rel_graph[i2][i1]['type'] = 'FS'
-                elif C and all_rel[i1][i2][1] > 1/2.0**(5/2.0): #DRUID_C, IBD2 > 1/2**(5/2)
-                    rel_graph[i1][i2]['type'] = 'FS'
-                    rel_graph[i2][i1]['type'] = 'FS'
-                else:
-                    rel_graph[i1][i2]['type'] = '1U'
-                    rel_graph[i2][i1]['type'] = '1U'
+        elif all_rel[i1][i2][1] > 1/2.0**(7/2.0):
+            if not C and all_rel[i1][i2][1] > 1/2.0**(11/4.0): #DRUID, IBD2 > 1/2**(11/4)
+                print("Warning: "+i1+' and '+i2+' have low levels of IBD2 for siblings, may be 3/4 sibs')
+                addEdgeType(i1, i2, 'FS', 'FS', rel_graph)
+            elif C and all_rel[i1][i2][1] > 1/2.0**(5/2.0): #DRUID_C, IBD2 > 1/2**(5/2)
+                addEdgeType(i1, i2, 'FS', 'FS', rel_graph)
             else:
-                if all_rel[i1][i2][3] == 1:
-                    #possible parent-child pair
-                    rel_graph.add_edge(i1,i2)
-                    rel_graph.add_edge(i2,i1)
-                    rel_graph[i1][i2]['type'] = '1U'
-                    rel_graph[i2][i1]['type'] = '1U'
+                addEdgeType(i1, i2, '1U', '1U', rel_graph)
+        else:
+            if all_rel[i1][i2][3] == 1:
+                #possible parent-child pair
+                addEdgeType(i1, i2, '1U', '1U', rel_graph)
 
     # ensure subgraphs of siblings are connected
     checked = set()
@@ -87,11 +68,7 @@ def inferFirst(rel_graph,all_rel, first, second, C):
 
             # add in missing siblings
             for [ind1,ind2] in itertools.combinations(add_sibs, 2):
-                if not rel_graph.has_edge(ind1,ind2):
-                    rel_graph.add_edge(ind1, ind2)
-                    rel_graph.add_edge(ind2, ind1)
-                rel_graph[ind1][ind2]['type'] = 'FS'
-                rel_graph[ind2][ind1]['type'] = 'FS'
+                addEdgeType(ind1, ind2, 'FS', 'FS', rel_graph)
 
             #get updated set of siblings, add to checked list
             siblings = getSibsFromGraph(rel_graph,node)
@@ -130,142 +107,23 @@ def inferFirst(rel_graph,all_rel, first, second, C):
 
             for ind in par:
                 for sib in siblings:
-                    if not rel_graph.has_edge(ind,sib):
-                        rel_graph.add_edge(ind, sib)
-                        rel_graph.add_edge(sib, ind)
-                    rel_graph[ind][sib]['type'] = 'P'
-                    rel_graph[sib][ind]['type'] = 'C'
+                    addEdgeType(ind, sib, 'P', 'C', rel_graph)
+
 
             for [ind1,ind2] in pc:
-                rel_graph[ind1][ind2]['type'] = 'PC'
-                rel_graph[ind2][ind1]['type'] = 'PC'
+                addEdgeType(ind1, ind2, 'PC', 'PC', rel_graph)
+
 
 
     # compare inferred graph to provided graph
-    for edge in rel_graph.edges():
-        if not edge in rel_graph_tmp.edges() or not rel_graph.get_edge_data(edge[0], edge[1])['type'] == rel_graph_tmp.get_edge_data(edge[0], edge[1])['type']:
-            print("Warning: Unable to confirm " + edge[0] + " and " + edge[1] + " as " + str(rel_graph.get_edge_data(edge[0], edge[1])['type']) + " but including as such")
-
     for edge in rel_graph_tmp.edges():
         if not edge in rel_graph.edges():
-            rel_graph.add_edge(edge[0], edge[1])
-            rel_graph[edge[0]][edge[1]]['type'] = rel_graph_tmp.get_edge_data(edge[0], edge[1])['type']
-
-
-
-
-
-def inferFirstFaminfo(rel_graph, all_rel, first, second, C):
-    #build graphs using first degree relative inferences as well as provided faminfo file
-
-    rel_graph_tmp = nx.DiGraph() #inferred, to be compared to input relationships
-    for [ind1, ind2] in first + second:  # iterate through currently inferred or provided first and second degree pairs
-        if ind1 < ind2:
-            i1 = ind1
-            i2 = ind2
-        else:
-            i1 = ind2
-            i2 = ind1
-
-        if i1 in all_rel.keys() and i2 in all_rel[i1].keys():
-            if all_rel[i1][i2][1] > 1 / 2.0 ** (5 / 2.0):  #check if IBD2 high enough to be siblings
-                rel_graph_tmp.add_edge(i1, i2)
-                rel_graph_tmp.add_edge(i2, i1)
-                if all_rel[i1][i2][2] < 1 / 2.0 ** (3 / 2.0):
-                    rel_graph_tmp[i1][i2]['type'] = 'FS'
-                    rel_graph_tmp[i2][i1]['type'] = 'FS'
-                else:
-                    rel_graph_tmp[i1][i2]['type'] = 'T'  # twin
-                    rel_graph_tmp[i2][i1]['type'] = 'T'
-            elif all_rel[i1][i2][1] > 1 / 2.0 ** (7 / 2.0): #check if IBD2 still fairly high
-                rel_graph_tmp.add_edge(i1, i2)
-                rel_graph_tmp.add_edge(i2, i1)
-                if not C and all_rel[i1][i2][1] > 1 / 2.0 ** (11 / 4.0):
-                    print("Warning: " + i1 + ' and ' + i2 + ' have low levels of IBD2 for siblings, may be 3/4 sibs')
-                    rel_graph_tmp[i1][i2]['type'] = 'FS'
-                    rel_graph_tmp[i2][i1]['type'] = 'FS'
-                elif C and all_rel[i1][i2][1] > 1 / 2.0 ** (5 / 2.0):
-                    rel_graph_tmp[i1][i2]['type'] = 'FS'
-                    rel_graph_tmp[i2][i1]['type'] = 'FS'
-                else:
-                    if all_rel[i1][i2][3] == 1:
-                        rel_graph_tmp[i1][i2]['type'] = '1U'
-                        rel_graph_tmp[i2][i1]['type'] = '1U'
-            elif all_rel[i1][i2][3] == 1: #if IBD2 low but individual is inferred to be first degree, save that relationship
-                rel_graph_tmp.add_edge(i1, i2)
-                rel_graph_tmp.add_edge(i2, i1)
-                rel_graph_tmp[i1][i2]['type'] = '1U'
-                rel_graph_tmp[i2][i1]['type'] = '1U'
-
-
-    #ensure our sibling subgraph is adequately connected
-    checked = set()
-    for node in rel_graph_tmp.nodes():
-        if not node in checked:
-            siblings = getSibsFromGraph(rel_graph_tmp,node)
-            siblings.add(node)
-            for sib in siblings:
-                checked.add(sib)
-            [add_sibs,remove] = checkSiblingSubgraph(rel_graph_tmp,siblings.copy(),C) #edit siblings list, return removed sibs
-
-            for sib in add_sibs:
-                checked.add(sib)
-
-            for ind in remove:
-                for sib in siblings:
-                    if rel_graph_tmp.has_edge(ind,sib):
-                        rel_graph_tmp[ind][sib]['type'] = '1U'
-                        rel_graph_tmp[sib][ind]['type'] = '1U'
-
-
-            for [ind1,ind2] in itertools.combinations(add_sibs, 2):
-                if not rel_graph_tmp.has_edge(ind1,ind2):
-                    rel_graph_tmp.add_edge(ind1,ind2)
-                    rel_graph_tmp.add_edge(ind2, ind1)
-                    rel_graph_tmp[ind1][ind2]['type'] = 'FS'
-                    rel_graph_tmp[ind2][ind1]['type'] = 'FS'
-
-
-
-            for ind in remove:
-                if ind in siblings:
-                    siblings.remove(ind)
-
-            #now that sibling set is completed, look for parents
-            #find neighbors of first sibling set labeled as '1'
-            siblings = list(siblings)
-            neighbors = rel_graph_tmp.neighbors(siblings[0])
-            inds_to_check = set()
-            for n in neighbors:
-                if rel_graph_tmp.get_edge_data(siblings[0],n)['type'] == '1U':
-                    inds_to_check.add(n)
-
-            #check if other siblings also have this neighbor and are labeled as '1'
-            par = set()
-            if len(inds_to_check):
-                for ind in inds_to_check:
-                    if checkIfParent(rel_graph_tmp, all_rel, siblings, ind, C):
-                        par.add(ind)
-
-            for ind in par:
-                for sib in siblings:
-                    if not rel_graph_tmp.has_edge(ind,sib):
-                        rel_graph_tmp.add_edge(ind, sib)
-                        rel_graph_tmp.add_edge(sib, ind)
-                    rel_graph_tmp[ind][sib]['type'] = 'P'
-                    rel_graph_tmp[sib][ind]['type'] = 'C'
-
-
-    #compare inferred graph to provided graph
-    for edge in rel_graph.edges():
-        if not edge in rel_graph_tmp.edges() or not rel_graph.get_edge_data(edge[0],edge[1])['type'] == rel_graph_tmp.get_edge_data(edge[0],edge[1])['type']:
-            print("Warning: Unable to confirm "+edge[0]+" and "+edge[1]+" as "+str(rel_graph.get_edge_data(edge[0],edge[1])['type'])+" but including as such")
-
-    for edge in rel_graph_tmp.edges():
-        if not edge in rel_graph.edges():
+            print("Warning: Unable to confirm " + edge[0] + " and " + edge[1] + " as " + str(rel_graph_tmp.get_edge_data(edge[0], edge[1])['type']) + " but including as such")
             rel_graph.add_edge(edge[0],edge[1])
-            rel_graph[edge[0]][edge[1]]['type'] = rel_graph_tmp.get_edge_data(edge[0],edge[1])['type']
-
+            rel_graph[edge[0]][edge[1]]['type'] = rel_graph_tmp.get_edge_data(edge[0], edge[1])['type']
+        elif rel_graph_tmp.get_edge_data(edge[0], edge[1])['type'] != rel_graph.get_edge_data(edge[0], edge[1])['type']:
+            print("Warning: Unable to confirm " + edge[0] + " and " + edge[1] + " as " + str(rel_graph.get_edge_data(edge[0], edge[1])['type']) + " but including as such")
+            rel_graph[edge[0]][edge[1]]['type'] = rel_graph_tmp.get_edge_data(edge[0], edge[1])['type']
 
 
 
@@ -278,67 +136,32 @@ def inferSecondPath(rel_graph, all_rel, second, third, file_for_segments, outfil
     else:
         dc_lower = 1/2.0**(9/2.0)
         dc_upper = 1/2.0**(11/2.0)
-    for [ind1, ind2] in second:
-        if not rel_graph.has_edge(ind1, ind2):
-            if ind1 < ind2:
-                i1 = ind1
-                i2 = ind2
-            else:
-                i1 = ind2
-                i2 = ind1
-            if i1 in all_rel.keys() and i2 in all_rel[i1].keys():
-                if all_rel[i1][i2][1] < dc_lower: #proportion IBD2 less than requirement for DC classification
-                    rel_graph.add_edge(i1,i2)
-                    rel_graph.add_edge(i2,i1)
-                    rel_graph[i1][i2]['type'] = '2'
-                    rel_graph[i2][i1]['type'] = '2'
-                elif all_rel[i1][i2][1] < dc_upper: #proportion IBD2 within requirement for DC classification
-                    sib1 = getSibsFromGraph(rel_graph,i1)
-                    sib2 = getSibsFromGraph(rel_graph,i2)
-                    sib1.append(i1)
-                    sib2.append(i2)
-                    #if one i1 is a DC of i2, then siblings of i1 are DC of siblings of i2 (and i2)
-                    for s1 in sib1:
-                        for s2 in sib2:
-                            if not rel_graph.has_edge(s1,s2):
-                                rel_graph.add_edge(s1, s2)
-                                rel_graph.add_edge(s2, s1)
-                                rel_graph[s1][s2]['type'] = 'DC'
-                                rel_graph[s2][s1]['type'] = 'DC'
-                            elif not rel_graph.get_edge_data(s1,s2)['type'] == 'FS':
-                                #label as DC
-                                rel_graph[s1][s2]['type'] = 'DC'
-                                rel_graph[s2][s1]['type'] = 'DC'
+    for [i1, i2] in second:
+        if not rel_graph.has_edge(i1, i2):
+            if all_rel[i1][i2][1] < dc_lower: #proportion IBD2 less than requirement for DC classification
+                addEdgeType(i1, i2, '2', '2', rel_graph)
+            elif all_rel[i1][i2][1] < dc_upper: #proportion IBD2 within requirement for DC classification
+                sib1 = getSibsFromGraph(rel_graph,i1)
+                sib2 = getSibsFromGraph(rel_graph,i2)
+                sib1.append(i1)
+                sib2.append(i2)
+                #if one i1 is a DC of i2, then siblings of i1 are DC of siblings of i2 (and i2)
+                for s1 in sib1:
+                    for s2 in sib2:
+                        addEdgeType(s1, s2, 'DC', 'DC', rel_graph)
 
-            else:
-                print("ERROR: no pairwise information for "+i1+' and '+i2)
 
-    for [ind1, ind2] in third:
-        if not rel_graph.has_edge(ind1, ind2):
-            if ind1 < ind2:
-                i1 = ind1
-                i2 = ind2
-            else:
-                i1 = ind2
-                i2 = ind1
-            if i1 in all_rel.keys() and i2 in all_rel[i1].keys():
-                if all_rel[i1][i2][1] >= dc_lower and all_rel[i1][i2][1] <= dc_upper: #proportion IBD2 within requirement for DC classification
-                    sib1 = getSibsFromGraph(rel_graph,i1)
-                    sib2 = getSibsFromGraph(rel_graph,i2)
-                    sib1.append(i1)
-                    sib2.append(i2)
-                    # if one i1 is a DC of i2, then siblings of i1 are DC of siblings of i2 (and i2)
-                    for s1 in sib1:
-                        for s2 in sib2:
-                            if not rel_graph.has_edge(s1, s2):
-                                rel_graph.add_edge(s1, s2)
-                                rel_graph.add_edge(s2, s1)
-                                rel_graph[s1][s2]['type'] = 'DC'
-                                rel_graph[s2][s1]['type'] = 'DC'
-                            elif not rel_graph.get_edge_data(s1, s2)['type'] == 'FS':
-                                # label as DC
-                                rel_graph[s1][s2]['type'] = 'DC'
-                                rel_graph[s2][s1]['type'] = 'DC'
+    for [i1, i2] in third:
+        if not rel_graph.has_edge(i1, i2):
+            if all_rel[i1][i2][1] >= dc_lower and all_rel[i1][i2][1] <= dc_upper: #proportion IBD2 within requirement for DC classification
+                sib1 = getSibsFromGraph(rel_graph,i1)
+                sib2 = getSibsFromGraph(rel_graph,i2)
+                sib1.append(i1)
+                sib2.append(i2)
+                # if one i1 is a DC of i2, then siblings of i1 are DC of siblings of i2 (and i2)
+                for s1 in sib1:
+                    for s2 in sib2:
+                        addEdgeType(s1,s2,'DC','DC',rel_graph)
 
     checked = set()
     for node in rel_graph.nodes():
@@ -347,47 +170,34 @@ def inferSecondPath(rel_graph, all_rel, second, third, file_for_segments, outfil
             sibs.add(node)
 
             if len(sibs) > 1:
-                second_av = getSecondDegreeRelatives(all_rel,second,third,sibs,C)
-                #second = getSecondDegreeRelativesFromAllRel(all_rel, inds, sibs, C)
-                print("Checking for aunts/uncles of "+node+" and his/her siblings")
+                second_av = getSecondDegreeRelatives(all_rel,second,third,sibs)
                 [avunc, avunc_hs1, avunc_hs2] = getAuntsUncles_IBD011_nonoverlapping_pairs(all_rel, sibs, halfsibs, second_av, file_for_segments, rel_graph)
-                print("Done")
 
                 # add the inferred avuncular relationships to graph
                 for av in avunc:
                     for sib in sibs:
-                        if not rel_graph.has_edge(sib,av): #if it doesn't have this edge, add it and label as AV
-                            rel_graph.add_edge(sib, av)
-                            rel_graph.add_edge(av, sib)
-                            rel_graph[sib][av]['type'] = 'NN'
-                            rel_graph[av][sib]['type'] = 'AU'
-                        elif not rel_graph[sib][av]['type'] == 'NN': #if it does have this edge but it isn't labeled as AV, label as AV
-                            rel_graph[sib][av]['type'] = 'NN'
-                            rel_graph[av][sib]['type'] = 'AU'
+                        if not rel_graph_tmp.has_edge(av,sib):
+                            addEdgeType(av,sib,'AU','NN',rel_graph) # if the provided family information doesn't contain this relationship, add it
+                        else:
+                            print(av+" inferred as aunt/uncle of "+sib+", but will continue using provided relationship type "+rel_graph_tmp[av][sib]['type']+'\n')
+
 
                 if len(avunc_hs1):
                     for av in avunc_hs1:
                         for sib in sibs+halfsibs[0]:
-                            if not rel_graph.has_edge(sib,av): #if it doesn't have this edge, add it and label as AV
-                                rel_graph.add_edge(sib, av)
-                                rel_graph.add_edge(av, sib)
-                                rel_graph[sib][av]['type'] = 'NN'
-                                rel_graph[av][sib]['type'] = 'AU'
-                            elif not rel_graph[sib][av]['type'] == 'NN': #if it does have this edge but it isn't labeled as AV, label as AV
-                                rel_graph[sib][av]['type'] = 'NN'
-                                rel_graph[av][sib]['type'] = 'AU'
+                            if not rel_graph_tmp.has_edge(av, sib):
+                                addEdgeType(av, sib, 'AU', 'NN', rel_graph)  # if the provided family information doesn't contain this relationship, add it
+                            else:
+                                print(av + " inferred as aunt/uncle of " + sib + ", but will continue using provided relationship type " + rel_graph_tmp[av][sib]['type'] + '\n')
+
 
                 if len(avunc_hs2):
                     for av in avunc_hs2:
                         for sib in sibs+halfsibs[1]:
-                            if not rel_graph.has_edge(sib,av): #if it doesn't have this edge, add it and label as AV
-                                rel_graph.add_edge(sib, av)
-                                rel_graph.add_edge(av, sib)
-                                rel_graph[sib][av]['type'] = 'NN'
-                                rel_graph[av][sib]['type'] = 'AU'
-                            elif not rel_graph[sib][av]['type'] == 'NN': #if it does have this edge but it isn't labeled as AV, label as AV
-                                rel_graph[sib][av]['type'] = 'NN'
-                                rel_graph[av][sib]['type'] = 'AU'
+                            if not rel_graph_tmp.has_edge(av, sib):
+                                addEdgeType(av, sib, 'AU', 'NN', rel_graph)  # if the provided family information doesn't contain this relationship, add it
+                            else:
+                                print(av + " inferred as aunt/uncle of " + sib + ", but will continue using provided relationship type " + rel_graph_tmp[av][sib]['type'] + '\n')
 
 
             for sib in sibs:
@@ -409,29 +219,35 @@ def getFamInfo(famfile, inds):
     file = open(famfile,'r')
     for line in file:
         l = str.split(line.rstrip())
-        if l[0] in inds and l[1] in inds:
-            if not l[0] in faminfo.keys():
-                faminfo[l[0]] = {}
-            if not l[1] in faminfo.keys():
-                faminfo[l[1]] = {}
-            faminfo[l[0]][l[1]] = l[2]
-            if l[2] == 'FS' or l[2] == 'HS':
-                faminfo[l[1]][l[0]] = l[2]
-            elif l[2] == 'P':
-                faminfo[l[1]][l[0]] = 'C'
-            elif l[2] == 'C':
-                faminfo[l[1]][l[0]] = 'P'
-            elif l[2] == 'AU':
-                faminfo[l[1]][l[0]] = 'NN'
-            elif l[2] == 'NN':
-                faminfo[l[1]][l[0]] = 'AU'
-            elif l[2] == 'GC':
-                faminfo[l[1]][l[0]] = 'GP'
-            elif l[2] == 'GP':
-                faminfo[l[1]][l[0]] = 'GC'
+        if l != []:
+            if l[0] in inds and l[1] in inds:
+                if not l[0] in faminfo.keys():
+                    faminfo[l[0]] = {}
+                if not l[1] in faminfo.keys():
+                    faminfo[l[1]] = {}
+                faminfo[l[0]][l[1]] = l[2]
+                if l[2] == 'FS' or l[2] == 'HS':
+                    faminfo[l[1]][l[0]] = l[2]
+                elif l[2] == 'P':
+                    faminfo[l[1]][l[0]] = 'C'
+                elif l[2] == 'C':
+                    faminfo[l[1]][l[0]] = 'P'
+                elif l[2] == 'AU':
+                    faminfo[l[1]][l[0]] = 'NN'
+                elif l[2] == 'NN':
+                    faminfo[l[1]][l[0]] = 'AU'
+                elif l[2] == 'GC':
+                    faminfo[l[1]][l[0]] = 'GP'
+                elif l[2] == 'GP':
+                    faminfo[l[1]][l[0]] = 'GC'
+                else:
+                    file.close()
+                    raise ValueError(str(l[2]) + ' is not an accepted relationship type (FS, P, C, AU, NN, GC, GP, HS)')
             else:
-                file.close()
-                raise ValueError(str(l[2]) + ' is not an accepted relationship type (FS, P, C, AU, NN, GC, GP, HS)')
+                if not l[0] in inds:
+                    print("Warning: "+l[0]+" not included in .inds file, not including "+l[2]+" relationship with "+l[1])
+                if not l[1] in inds:
+                    print("Warning: "+l[1]+" not included in .inds file, not including "+l[2]+" relationship with "+l[0])
 
     file.close()
 
@@ -731,38 +547,20 @@ def collectIBDsegments(sibset,file_for_segments):
     # collect pairwise IBD0,1,2 regions between all pairs of siblings
     IBD_all = {}
     for [ind1, ind2] in itertools.combinations(sibset, 2):
-        IBD0 = {}
-        IBD1 = {}
-        IBD2 = {}
         if not ind1 in IBD_all.keys():
             IBD_all[ind1] = {}
 
-        if not ind2 in IBD_all[ind1].keys():
-            IBD_all[ind1][ind2] = []
+        IBD_all[ind1][ind2] = []
 
         tmp = getIBDsegments(ind1, ind2,file_for_segments)
         for chr in tmp[0].keys():
-            if not chr in IBD0.keys():
-                IBD0[chr] = []
-            for seg in tmp[0][chr]:
-                IBD0[chr].append(seg)
-            IBD0[chr].sort()
-
+            tmp[0][chr].sort()
         for chr in tmp[1].keys():
-            if not chr in IBD1.keys():
-                IBD1[chr] = []
-            for seg in tmp[1][chr]:
-                IBD1[chr].append(seg)
-            IBD1[chr].sort()
-
+            tmp[1][chr].sort()
         for chr in tmp[2].keys():
-            if not chr in IBD2.keys():
-                IBD2[chr] = []
-            for seg in tmp[2][chr]:
-                IBD2[chr].append(seg)
-            IBD2[chr].sort()
+            tmp[2][chr].sort()
 
-        IBD_all[ind1][ind2] = [IBD0, IBD1, IBD2]
+        IBD_all[ind1][ind2] = tmp
 
     return IBD_all
 
@@ -814,32 +612,16 @@ def collectIBDsegmentsSibsAvuncular(sibset, avunc,file_for_segments):  # n is nu
         for ind2 in avunc:
             if not ind2 in IBD_all[ind1].keys():
                 IBD_all[ind1][ind2] = []
-            IBD0 = {}
-            IBD1 = {}
-            IBD2 = {}
+
             tmp = getIBDsegments(ind1, ind2,file_for_segments)
             for chr in tmp[0].keys():
-                if not chr in IBD0.keys():
-                    IBD0[chr] = []
-                for seg in tmp[0][chr]:
-                    IBD0[chr].append(seg)
-                IBD0[chr].sort()
-
+                tmp[0][chr].sort()
             for chr in tmp[1].keys():
-                if not chr in IBD1.keys():
-                    IBD1[chr] = []
-                for seg in tmp[1][chr]:
-                    IBD1[chr].append(seg)
-                IBD1[chr].sort()
-
+                tmp[1][chr].sort()
             for chr in tmp[2].keys():
-                if not chr in IBD2.keys():
-                    IBD2[chr] = []
-                for seg in tmp[2][chr]:
-                    IBD2[chr].append(seg)
-                IBD2[chr].sort()
+                tmp[2][chr].sort()
 
-            IBD_all[ind1][ind2] = [IBD0, IBD1, IBD2]
+            IBD_all[ind1][ind2] = tmp
 
     return IBD_all
 
@@ -858,34 +640,20 @@ def collectIBDsegmentsSibsAvuncularCombine(sibset, avunc, file_for_segments):
         for ind2 in avunc:
             tmp = getIBDsegments(ind1, ind2, file_for_segments)
             for chr in tmp[0].keys():
-                if not chr in IBD0.keys():
-                    IBD0[chr] = []
-                for seg in tmp[0][chr]:
-                    IBD0[chr].append(seg)
-                #IBD0[chr].sort()
-
+                tmp[0][chr].sort()
             for chr in tmp[1].keys():
-                if not chr in IBD1.keys():
-                    IBD1[chr] = []
-                for seg in tmp[1][chr]:
-                    IBD1[chr].append(seg)
-                #IBD1[chr].sort()
-
+                tmp[1][chr].sort()
             for chr in tmp[2].keys():
-                if not chr in IBD2.keys():
-                    IBD2[chr] = []
-                for seg in tmp[2][chr]:
-                    IBD2[chr].append(seg)
-                #IBD2[chr].sort()
+                tmp[2][chr].sort()
 
-        for chr in IBD0.keys():
-            IBD0[chr] = mergeIntervals(IBD0[chr])
-        for chr in IBD1.keys():
-            IBD1[chr] = mergeIntervals(IBD1[chr])
-        for chr in IBD2.keys():
-            IBD2[chr] = mergeIntervals(IBD2[chr])
+        for chr in tmp[0].keys():
+            tmp[0][chr] = mergeIntervals(tmp[0][chr].copy())
+        for chr in tmp[1].keys():
+            tmp[1][chr] = mergeIntervals(tmp[1][chr].copy())
+        for chr in tmp[2].keys():
+            tmp[2][chr] = mergeIntervals(tmp[2][chr].copy())
 
-        IBD_all[ind1]['A'] = [IBD0, IBD1, IBD2]
+        IBD_all[ind1]['A'] = tmp
 
     return IBD_all
 
@@ -1525,80 +1293,48 @@ def getAllRel(results_file, inds_file):
     first = [] #list of first degree relative pairs according to Refined IBD results
     second = [] #list of second degree relative pairs according to Refined IBD results
     third = [] #list of third degree relative pairs according to Refined IBD results
-    inds = []
+    inds = set()
     if inds_file != '':
         file = open(inds_file,'r')
         for line in file:
             l = str.split(line.rstrip())
             if len(l):
-                inds.append(l[0])
+                inds.add(l[0])
 
         file.close()
 
     all_rel = {}
     file = open(results_file,'r')
-    if inds_file == '':
-        for line in file:
-            l = str.split(line.rstrip())
+    for line in file:
+        l = str.split(line.rstrip())
+        if inds_file == '':
             if not l[0] in inds:
-                inds.append(l[0])
+                inds.add(l[0])
             if not l[1] in inds:
-                inds.append(l[1])
+                inds.add(l[1])
+        if l[0] in inds and l[1] in inds:
             ibd1 = float(l[2])
             ibd2 = float(l[3])
             K = ibd1/4.0 + ibd2/2.0
             degree = getInferredFromK(K)
             if l[0] < l[1]:
-                if not l[0] in all_rel.keys():
-                    all_rel[l[0]] = {} #IBD1, IBD2, K, D
-                all_rel[l[0]][l[1]] = [ibd1,ibd2, K, degree]
-                if degree == 1:
-                    first.append([l[0],l[1]])
-                elif degree == 2:
-                    second.append([l[0],l[1]])
-                elif degree == 3:
-                    third.append([l[0], l[1]])
+                ind1 = l[0]
+                ind2 = l[1]
             else:
-                if not l[1] in all_rel.keys():
-                    all_rel[l[1]] = {}
-                all_rel[l[1]][l[0]] = [ibd1, ibd2, K, degree]
-                if degree == 1:
-                    first.append([l[1],l[0]])
-                elif degree == 2:
-                    second.append([l[1],l[0]])
-                elif degree == 3:
-                    third.append([l[1],l[0]])
-        file.close()
-    else:
-        for line in file:
-            l = str.split(line.rstrip())
-            if l[0] in inds and l[1] in inds:
-                ibd1 = float(l[2])
-                ibd2 = float(l[3])
-                K = ibd1 / 4.0 + ibd2 / 2.0
-                degree = getInferredFromK(K)
-                if l[0] < l[1]:
-                    if not l[0] in all_rel.keys():
-                        all_rel[l[0]] = {}  # IBD1, IBD2, K, D
-                    all_rel[l[0]][l[1]] = [ibd1, ibd2, K, degree]
-                    if degree == 1:
-                        first.append([l[0], l[1]])
-                    elif degree == 2:
-                        second.append([l[0], l[1]])
-                    elif degree == 3:
-                        third.append([l[0],l[1]])
-                else:
-                    if not l[1] in all_rel.keys():
-                        all_rel[l[1]] = {}
-                    all_rel[l[1]][l[0]] = [ibd1, ibd2, K, degree]
-                    if degree == 1:
-                        first.append([l[1], l[0]])
-                    elif degree == 2:
-                        second.append([l[1], l[0]])
-                    elif degree == 3:
-                        third.append([l[1], l[0]])
+                ind1 = l[1]
+                ind2 = l[0]
+            if not ind1 in all_rel.keys():
+                all_rel[ind1] = {} #IBD1, IBD2, K, D
+            all_rel[ind1][ind2] = [ibd1,ibd2, K, degree]
+            if degree == 1:
+                first.append([ind1,ind2])
+            elif degree == 2:
+                second.append([ind1,ind2])
+            elif degree == 3:
+                third.append([ind1, ind2])
 
-        file.close()
+
+    file.close()
 
 
     for [ind1,ind2] in itertools.combinations(inds, 2):
@@ -1617,102 +1353,50 @@ def getAllRel(results_file, inds_file):
     return [all_rel,inds,first,second,third]
 
 
-def getSecondDegreeRelatives(all_rel,second,third,sibset,C):
+def getSecondDegreeRelatives(all_rel,second,third,sibset):
     # collect all individuals we should check for being aunts/uncles of the sibset
     check_for_au = set()
     siblist = list(sibset)
-    if C: #only consider pairs currently inferred to be degree 2
-        check_inds = set()
-        for [ind1,ind2] in second:
-            if ind1 in sibset:
-                check_inds.add(ind2)
-            if ind2 in sibset:
-                check_inds.add(ind2)
+    check_inds = set()
+    for [ind1, ind2] in second+third:
+        if ind1 in sibset:
+            check_inds.add(ind2)
+        if ind2 in sibset:
+            check_inds.add(ind2)
 
-        for ind in check_inds:
-            if not ind in sibset:
-                k = 0
-                deg = 2
-                while k < len(sibset) and deg == 2:
-                    if ind < siblist[k]:
-                        deg = all_rel[ind][siblist[k]][3]
-                    else:
-                        deg = all_rel[siblist[k]][ind][3]
-                    k = k + 1
-                if k == len(sibset) and deg == 2:
-                    check_for_au.add(ind)
-
-    else:
-        check_inds = set()
-        for [ind1, ind2] in second+third:
-            if ind1 in sibset:
-                check_inds.add(ind2)
-            if ind2 in sibset:
-                check_inds.add(ind2)
-
-        for ind in check_inds:
-            if not ind in sibset:
-                degs = set()
-                for k in range(0,len(sibset)):
-                    if ind < siblist[k]:
-                        degs.add(all_rel[ind][siblist[k]][3])
-                    else:
-                        degs.add(all_rel[siblist[k]][ind][3])
-                if 2 in degs or 3 in degs:
-                    check_for_au.add(ind)
+    for ind in check_inds:
+        if not ind in sibset:
+            degs = set()
+            for k in range(0,len(sibset)):
+                if ind < siblist[k]:
+                    degs.add(all_rel[ind][siblist[k]][3])
+                else:
+                    degs.add(all_rel[siblist[k]][ind][3])
+            if 2 in degs or 3 in degs:
+                check_for_au.add(ind)
 
 
     return check_for_au
 
-def getSecondDegreeRelativesFromAllRel(all_rel,inds,sibset,C):
-    # collect all inferred second and third degree relatives of any sibling (to check for aunts/uncles later)
-    second = []
-    if C:
-        for ind in inds:
-            if not ind in sibset:
-               k = 0
-               deg = 2
-            while k < len(sibset) and deg == 2:
-                if ind < list(sibset)[k]:
-                    deg = all_rel[ind][list(sibset)[k]][3]
-                else:
-                    deg = all_rel[list(sibset)[k]][ind][3]
-                k = k + 1
-
-            if k == len(sibset) and deg == 2:
-                second.append(ind)
-    else:
-        for ind in inds:
-            if not ind in sibset:
-                degs = []
-                for k in range(0,len(sibset)):
-                    if ind < list(sibset)[k]:
-                        degs.append(all_rel[ind][list(sibset)[k]][3])
-                    else:
-                        degs.append(all_rel[list(sibset)[k]][ind][3])
-                if 2 in degs or 3 in degs:
-                    second.append(ind)
-
-    return second
 
 
 
 def getAuntsUncles_IBD011_nonoverlapping_pairs(all_rel, sibset, halfsibs, second, file_for_segments, rel_graph):
     # check whether individuals in list 'second' are likely aunts/uncles of 'sibset' and possibly also 'halfsibs'
-    avunc = []
-    remove_second = []
-    avunc_hs1 = []
-    avunc_hs2 = []
+    avunc = set()
+    remove_second = set()
+    avunc_hs1 = set()
+    avunc_hs2 = set()
     if len(second):
         for ind in second:
             for sib in sibset:
                 if ind < sib:
                     if all_rel[ind][sib][1] > 0.01 or (rel_graph.has_edge(ind,sib) and rel_graph.get_edge_data(ind,sib)['type'] in ['P','HS','GP']): #if proportion of genome shared IBD2 is > 1%
-                        remove_second.append(ind)
+                        remove_second.add(ind)
                         break
                 else:
                     if all_rel[sib][ind][1] > 0.01 or (rel_graph.has_edge(sib,ind) and rel_graph.get_edge_data(sib,ind)['type'] in ['P','HS','GP']):
-                        remove_second.append(ind)
+                        remove_second.add(ind)
                         break
 
         for ind in remove_second:
@@ -1727,10 +1411,10 @@ def getAuntsUncles_IBD011_nonoverlapping_pairs(all_rel, sibset, halfsibs, second
                     avsib = collectIBDsegmentsSibsAvuncular(sibset[(i*2):(i*2+2)], [av],file_for_segments)
                     IBD011 = getTotalLength(findOverlap(sibseg, avsib, 0, 1, 1, {}, 0.5))
                     if IBD011 > 50:
-                        avunc.append(av)
+                        avunc.add(av)
                         avsibs = getSibsFromGraph(rel_graph, av)
                         for avsib in avsibs:
-                            avunc.append(av)
+                            avunc.add(av)
                     elif IBD011 < 20:
                         break
 
@@ -1744,10 +1428,10 @@ def getAuntsUncles_IBD011_nonoverlapping_pairs(all_rel, sibset, halfsibs, second
                         avsib = collectIBDsegmentsSibsAvuncular(allsibs[(i * 2):(i * 2 + 2)], [av], file_for_segments)
                         IBD011 = getTotalLength(findOverlap(sibseg, avsib, 0, 1, 1, {}, 0.5))
                         if IBD011 > 50:
-                            avunc_hs1.append(av)
+                            avunc_hs1.add(av)
                             avsibs = getSibsFromGraph(rel_graph, av)
                             for avsib in avsibs:
-                                avunc_hs1.append(av)
+                                avunc_hs1.add(av)
                             is_av = 1
                         elif IBD011 < 20:
                             break
@@ -1762,10 +1446,10 @@ def getAuntsUncles_IBD011_nonoverlapping_pairs(all_rel, sibset, halfsibs, second
                             avsib = collectIBDsegmentsSibsAvuncular(allsibs[(i * 2):(i * 2 + 2)], [av], file_for_segments)
                             IBD011 = getTotalLength(findOverlap(sibseg, avsib, 0, 1, 1, {}, 0.5))
                             if IBD011 > 50:
-                                avunc_hs2.append(av)
+                                avunc_hs2.add(av)
                                 avsibs = getSibsFromGraph(rel_graph, av)
                                 for avsib in avsibs:
-                                    avunc_hs1.append(av)
+                                    avunc_hs1.add(av)
                                 is_av = 1
                             elif IBD011 < 20:
                                 break
@@ -1829,7 +1513,11 @@ def addToChecked(ind1,ind2,checked):
     checked.append([ind1,ind2])
     checked.append([ind2,ind1])
 
-
+def pairInAllRel(ind1,ind2,all_rel):
+    if ind1 in all_rel.keys() and ind2 in all_rel[ind1].keys():
+        return 1
+    else:
+        return 0
 
 
 def runDRUID(rel_graph, all_rel, inds, args):
@@ -1838,7 +1526,7 @@ def runDRUID(rel_graph, all_rel, inds, args):
     checked = []
     for [ind1,ind2] in itertools.combinations(inds,2): #test each pair of individuals
         if not [ind1,ind2] in checked and [ind2,ind1] not in checked: #if pair not yet tested
-            print("Comparing "+ind1+" and "+ind2+"\n")
+            print("Comparing "+ind1+" and "+ind2)
             results = []
             #if the pair is already connected via graph, output that relationship
             if rel_graph.has_edge(ind1, ind2):

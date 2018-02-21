@@ -257,6 +257,14 @@ def checkSiblingSubgraph(tmp_graph,siblings,C):
 
     return [list(set(all_sibs)), remove]
 
+def addEdgeType(ind1,ind2,type1,type2,rel_graph):
+    if not rel_graph.has_edge(ind1, ind2):
+        rel_graph.add_edge(ind1,ind2)
+        rel_graph.add_edge(ind2,ind1)
+    rel_graph[ind1][ind2]['type'] = type1
+    rel_graph[ind2][ind1]['type'] = type2
+
+
 def anyIn(list1,list2):
     return [x for x in list1 if x in list2]
 
@@ -267,7 +275,7 @@ def thresholdK(pcD):
     return 0.9-0.02*mean(pcD)
 
 
-def checkForMoveUp(all_rel, ind, sibset, older_gen, possible_par, third_party, outfile):
+def checkForMoveUp(all_rel, ind, sibset, older_gen, possible_par, third_party):
     # check if parent/grandparent is in dataset and is more related to third_party
     if len(older_gen):
         if anyIn(older_gen, third_party):
@@ -333,7 +341,6 @@ def checkForMoveUp(all_rel, ind, sibset, older_gen, possible_par, third_party, o
                 elif all(x >= 5 or x == 0 for x in indD) and all(x != 0 for x in pcD) and all(x <= max(indD) for x in pcD) and thresholdK(pcD) * pcK > indK:  # all siblings and the possible parent are >= 5th degree relatives of the possible parent
                     pc_possible_return.append(pc)
                     pc_possible_return_K.append(pcK)
-                else:
 
 
             if len(pc_possible_return) == 1:
