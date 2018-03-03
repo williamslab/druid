@@ -275,6 +275,7 @@ def thresholdK(pcD):
     return 0.9-0.02*mean(pcD)
 
 
+
 def checkForMoveUp(all_rel, ind, sibset, older_gen, possible_par, third_party):
     # check if parent/grandparent is in dataset and is more related to third_party
     if len(older_gen):
@@ -309,38 +310,37 @@ def checkForMoveUp(all_rel, ind, sibset, older_gen, possible_par, third_party):
         if anyIn(possible_par, third_party):
             return 'same'
         else:
-            sibset = list(sibset)
             # check if any possible parents are more closely related
             pc_possible_return = []
             pc_possible_return_K = []
             for pc in possible_par:
-                pcD = set()
-                pcK = 0
-                indD = set()
-                indK = 0
+                pcD = [] #degrees of relatedness between PC and third party
+                pcK = [] # kinship coefficients between PC and third party
+                indD = [] #degrees of relatedness between current individual and third party
+                indK = [] # kinship coefficients between current individual and third party
 
                 for tp in third_party:
                     if tp < pc:
-                        pcD.add(all_rel[tp][pc][3])
-                        pcK = pcK + all_rel[tp][pc][2]
+                        pcD.append(all_rel[tp][pc][3])
+                        pcK.append(all_rel[tp][pc][2])
                     else:
-                        pcD.add(all_rel[pc][tp][3])
-                        pcK = pcK + all_rel[pc][tp][2]
+                        pcD.append(all_rel[pc][tp][3])
+                        pcK.append(all_rel[pc][tp][2])
                     if tp < ind:
-                        indD.add(all_rel[tp][ind][3])
-                        indK = indK + all_rel[tp][ind][2]
+                        indD.append(all_rel[tp][ind][3])
+                        indK.append(all_rel[tp][ind][2])
                     else:
-                        indD.add(all_rel[ind][tp][3])
-                        indK = indK + all_rel[ind][tp][2]
-                pcK = pcK / len(third_party)
-                indK = indK / len(third_party)
+                        indD.append(all_rel[ind][tp][3])
+                        indK.append(all_rel[ind][tp][2])
 
-                if all(x != 0 for x in pcD) and (0 in indD or all([min(pcD) < x for x in indD])):  # current individual is more distantly related than the possible parent
-                    pc_possible_return.append(pc)  # use possible parent
-                    pc_possible_return_K.append(pcK)
-                elif all(x >= 5 or x == 0 for x in indD) and all(x != 0 for x in pcD) and all(x <= max(indD) for x in pcD) and thresholdK(pcD) * pcK > indK:  # all siblings and the possible parent are >= 5th degree relatives of the possible parent
-                    pc_possible_return.append(pc)
-                    pc_possible_return_K.append(pcK)
+                if all(x != 0 for x in pcD):
+                    if all([x <= 5 for x in pcD]): # PC is 5th degree or closer to all third party individuals
+                        if all([min(pcD) < x for x in indD]):  # PC's closest degree of relatedness with third party is strictly less than all degrees of relatedness between current ind and third party
+                            pc_possible_return.append(pc)  # use PC
+                            pc_possible_return_K.append(pcK)
+                    elif all([thresholdK([pcD[x]]) * pcK[x] > indK[x] for x in range(0,len(pcD))]):  # for each third party individual, pc's K is sufficiently larger than current individual's K
+                        pc_possible_return.append(pc)
+                        pc_possible_return_K.append(max(pcK))
 
 
             if len(pc_possible_return) == 1:
