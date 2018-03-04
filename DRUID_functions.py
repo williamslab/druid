@@ -1079,20 +1079,20 @@ def combineBothGPsKeepProportionOnlyExpectation(sib1, avunc1, pc1, sib2, avunc2,
                 to_add = [sib_rel, avunc, estimated_out_exp, refined]
                 result.append(to_add)
 
-            for p1 in pc1:
-                if rel_graph.has_edge(sib_rel, p1):
-                    estimated_out_exp = rel_graph.get_edge_data(sib_rel,p1)['type']
-                else:
-                    if estimated_exp != 0:
-                        estimated_out_exp = estimated_exp + 1
-                    else:
-                        estimated_out_exp = 0
-                if sib_rel < p1:
-                    refined = all_rel[sib_rel][p1][3]
-                else:
-                    refined = all_rel[p1][sib_rel][3]
-                to_add = [sib_rel, p1, estimated_out_exp, refined]
-                result.append(to_add)
+            # for p1 in pc1:
+            #     if rel_graph.has_edge(sib_rel, p1):
+            #         estimated_out_exp = rel_graph.get_edge_data(sib_rel,p1)['type']
+            #     else:
+            #         if estimated_exp != 0:
+            #             estimated_out_exp = estimated_exp + 1
+            #         else:
+            #             estimated_out_exp = 0
+            #     if sib_rel < p1:
+            #         refined = all_rel[sib_rel][p1][3]
+            #     else:
+            #         refined = all_rel[p1][sib_rel][3]
+            #     to_add = [sib_rel, p1, estimated_out_exp, refined]
+            #     result.append(to_add)
 
         for avunc_rel in avunc2:
             for sib in sib1:
@@ -1125,36 +1125,36 @@ def combineBothGPsKeepProportionOnlyExpectation(sib1, avunc1, pc1, sib2, avunc2,
                 to_add = [avunc, avunc_rel, estimated_out_exp, refined]
                 result.append(to_add)
 
-            for p1 in pc1:
-                if rel_graph.has_edge(sib_rel, p1):
-                    estimated_out_exp = rel_graph.get_edge_data(sib_rel,p1)['type']
-                else:
-                    if estimated_exp != 0:
-                        estimated_out_exp = estimated_exp + 1
-                    else:
-                        estimated_out_exp = 0
-                if avunc_rel < p1:
-                    refined = all_rel[avunc_rel][p1][3]
-                else:
-                    refined = all_rel[p1][avunc_rel][3]
-                to_add = [avunc_rel, p1, estimated_out_exp, refined]
-                result.append(to_add)
+            # for p1 in pc1:
+            #     if rel_graph.has_edge(sib_rel, p1):
+            #         estimated_out_exp = rel_graph.get_edge_data(sib_rel,p1)['type']
+            #     else:
+            #         if estimated_exp != 0:
+            #             estimated_out_exp = estimated_exp + 1
+            #         else:
+            #             estimated_out_exp = 0
+            #     if avunc_rel < p1:
+            #         refined = all_rel[avunc_rel][p1][3]
+            #     else:
+            #         refined = all_rel[p1][avunc_rel][3]
+            #     to_add = [avunc_rel, p1, estimated_out_exp, refined]
+            #     result.append(to_add)
 
-        for p1 in pc1:
-            for p2 in pc2:
-                if rel_graph.has_edge(p1, p2):
-                    estimated_out_exp = rel_graph.get_edge_data(p1, p2)['type']
-                else:
-                    if estimated_exp != 0:
-                        estimated_out_exp = estimated_exp + 2
-                    else:
-                        estimated_out_exp = 0
-                if p1 < p2:
-                    refined = all_rel[p1][p2][3]
-                else:
-                    refined = all_rel[p2][p1][3]
-                to_add = [p1, p2, estimated_out_exp, refined]
-                result.append(to_add)
+        # for p1 in pc1:
+        #     for p2 in pc2:
+        #         if rel_graph.has_edge(p1, p2):
+        #             estimated_out_exp = rel_graph.get_edge_data(p1, p2)['type']
+        #         else:
+        #             if estimated_exp != 0:
+        #                 estimated_out_exp = estimated_exp + 2
+        #             else:
+        #                 estimated_out_exp = 0
+        #         if p1 < p2:
+        #             refined = all_rel[p1][p2][3]
+        #         else:
+        #             refined = all_rel[p2][p1][3]
+        #         to_add = [p1, p2, estimated_out_exp, refined]
+        #         result.append(to_add)
 
     return result
 
@@ -1385,8 +1385,7 @@ def getAuntsUncles_IBD011_nonoverlapping_pairs(all_rel, sibset, halfsibs, second
     # check whether individuals in list 'second' are likely aunts/uncles of 'sibset' and possibly also 'halfsibs'
     avunc = set()
     remove_second = set()
-    avunc_hs1 = set()
-    avunc_hs2 = set()
+    avunc_hs_all = []
     if len(second):
         for ind in second:
             for sib in sibset:
@@ -1404,11 +1403,10 @@ def getAuntsUncles_IBD011_nonoverlapping_pairs(all_rel, sibset, halfsibs, second
 
         sibset = list(sibset)
         if len(second):
-            numpairs = int(len(sibset) / 2)
-            for i in range(0, numpairs):
-                sibseg = collectIBDsegments(sibset[(i*2):(i*2+2)],file_for_segments)
+            for [sib1, sib2] in itertools.combinations(sibset,2):
+                sibseg = collectIBDsegments([sib1,sib2],file_for_segments)
                 for av in second:
-                    avsib = collectIBDsegmentsSibsAvuncular(sibset[(i*2):(i*2+2)], [av],file_for_segments)
+                    avsib = collectIBDsegmentsSibsAvuncular([sib1,sib2], [av],file_for_segments)
                     IBD011 = getTotalLength(findOverlap(sibseg, avsib, 0, 1, 1, {}, 0.5))
                     if IBD011 > 50:
                         avunc.add(av)
@@ -1420,43 +1418,26 @@ def getAuntsUncles_IBD011_nonoverlapping_pairs(all_rel, sibset, halfsibs, second
 
             #check with halfsibs
             if len(halfsibs):
-                numpairs = int(len(sibset) * len(halfsibs[0]))
-                allsibs = sibset + halfsibs[0]
-                for i in range(0, numpairs):
-                    sibseg = collectIBDsegments(allsibs[(i * 2):(i * 2 + 2)], file_for_segments)
-                    for av in second:
-                        avsib = collectIBDsegmentsSibsAvuncular(allsibs[(i * 2):(i * 2 + 2)], [av], file_for_segments)
-                        IBD011 = getTotalLength(findOverlap(sibseg, avsib, 0, 1, 1, {}, 0.5))
-                        if IBD011 > 50:
-                            avunc_hs1.add(av)
-                            avsibs = getSibsFromGraph(rel_graph, av)
-                            for avsib in avsibs:
-                                avunc_hs1.add(av)
-                            is_av = 1
-                        elif IBD011 < 20:
-                            break
-
-                if len(halfsibs) > 1 and len(halfsibs[1]):
-                    numpairs = int(len(sibset) * len(halfsibs[1]))
-                    allsibs = sibset + halfsibs[1]
-                    for i in range(0, numpairs):
+                avunc_hs = set()
+                for hs in range(0,len(halfsibs)):
+                    for [sib1,sib2] in itertools.product(sibset,halfsibs[hs]): #all pairs of [sib, halfsib]
                         sibseg = collectIBDsegments(allsibs[(i * 2):(i * 2 + 2)], file_for_segments)
-                        is_av = 0
                         for av in second:
                             avsib = collectIBDsegmentsSibsAvuncular(allsibs[(i * 2):(i * 2 + 2)], [av], file_for_segments)
                             IBD011 = getTotalLength(findOverlap(sibseg, avsib, 0, 1, 1, {}, 0.5))
                             if IBD011 > 50:
-                                avunc_hs2.add(av)
+                                avunc_hs.add(av)
                                 avsibs = getSibsFromGraph(rel_graph, av)
                                 for avsib in avsibs:
-                                    avunc_hs1.add(av)
-                                is_av = 1
+                                    avunc_hs.add(avsib)
                             elif IBD011 < 20:
                                 break
+                    avunc_hs_all.append(avunc_hs)
 
 
 
-    return [avunc, avunc_hs1, avunc_hs2]
+
+    return [avunc, avunc_hs]
 
 
 def checkUseHalfsibs(sibs,halfsib_sets,rel,all_rel):
