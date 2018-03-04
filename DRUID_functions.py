@@ -171,7 +171,7 @@ def inferSecondPath(rel_graph, all_rel, second, third, file_for_segments, outfil
 
             if len(sibs) > 1:
                 second_av = getSecondDegreeRelatives(all_rel,second,third,sibs)
-                [avunc, avunc_hs1, avunc_hs2] = getAuntsUncles_IBD011_nonoverlapping_pairs(all_rel, sibs, halfsibs, second_av, file_for_segments, rel_graph)
+                [avunc, avunc_hs_all] = getAuntsUncles_IBD011_nonoverlapping_pairs(all_rel, sibs, halfsibs, second_av, file_for_segments, rel_graph)
 
                 # add the inferred avuncular relationships to graph
                 for av in avunc:
@@ -182,23 +182,14 @@ def inferSecondPath(rel_graph, all_rel, second, third, file_for_segments, outfil
                             print(av+" inferred as aunt/uncle of "+sib+", but will continue using provided relationship type "+rel_graph_tmp[av][sib]['type']+'\n')
 
 
-                if len(avunc_hs1):
-                    for av in avunc_hs1:
-                        for sib in sibs+halfsibs[0]:
-                            if not rel_graph_tmp.has_edge(av, sib):
-                                addEdgeType(av, sib, 'AU', 'NN', rel_graph)  # if the provided family information doesn't contain this relationship, add it
-                            else:
-                                print(av + " inferred as aunt/uncle of " + sib + ", but will continue using provided relationship type " + rel_graph_tmp[av][sib]['type'] + '\n')
-
-
-                if len(avunc_hs2):
-                    for av in avunc_hs2:
-                        for sib in sibs+halfsibs[1]:
-                            if not rel_graph_tmp.has_edge(av, sib):
-                                addEdgeType(av, sib, 'AU', 'NN', rel_graph)  # if the provided family information doesn't contain this relationship, add it
-                            else:
-                                print(av + " inferred as aunt/uncle of " + sib + ", but will continue using provided relationship type " + rel_graph_tmp[av][sib]['type'] + '\n')
-
+                if len(avunc_hs_all):
+                    for hs in range(0,len(avunc_hs_all)):
+                        for av in avunc_hs[hs]:
+                            for sib in sibs+halfsibs[hs]:
+                                if not rel_graph_tmp.has_edge(av, sib):
+                                    addEdgeType(av, sib, 'AU', 'NN', rel_graph)  # if the provided family information doesn't contain this relationship, add it
+                                else:
+                                    print(av + " inferred as aunt/uncle of " + sib + ", but will continue using provided relationship type " + rel_graph_tmp[av][sib]['type'] + '\n')
 
             for sib in sibs:
                 checked.add(sib)
