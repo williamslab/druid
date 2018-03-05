@@ -194,16 +194,17 @@ def getSibsAndHalfSibsFromGraph(tmp_graph,ind):
             sibs.add(x)
 
     halfsib_sets = []
+    hs = list(hs)
     while len(hs):
         hssibs = getSibsFromGraph(tmp_graph, hs[0])
         halfsib_set = [hs[0]]
-        for hs in hssibs:
-            halfsib_set.append(hs)
-            hs.remove(hs)
+        for ind_sib in hssibs:
+            halfsib_set.append(ind_sib)
+            hs.remove(ind_sib)
         hs.remove(hs[0])
         halfsib_sets.append(halfsib_set)
 
-    return [sibs, hs]
+    return [sibs, halfsib_sets]
 
 
 
@@ -337,7 +338,7 @@ def checkForMoveUp(all_rel, ind, sibset, older_gen, possible_par, third_party):
                     if all([x <= 5 for x in pcD]): # PC is 5th degree or closer to all third party individuals
                         if all([min(pcD) < x for x in indD]):  # PC's closest degree of relatedness with third party is strictly less than all degrees of relatedness between current ind and third party
                             pc_possible_return.append(pc)  # use PC
-                            pc_possible_return_K.append(pcK)
+                            pc_possible_return_K.append(max(pcK))
                     elif all([thresholdK([pcD[x]]) * pcK[x] > indK[x] for x in range(0,len(pcD))]):  # for each third party individual, pc's K is sufficiently larger than current individual's K
                         pc_possible_return.append(pc)
                         pc_possible_return_K.append(max(pcK))
@@ -437,6 +438,7 @@ def pullFamily(tmp_graph,ind):
         avunc_sets.append(list(x))
 
     halfsib_sets = []
+    halfsibs = list(halfsibs)
     while len(halfsibs):
         hssibs = getSibsFromGraph(tmp_graph, halfsibs[0])
         halfsib_set = [halfsibs[0]]

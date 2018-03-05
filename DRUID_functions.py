@@ -127,7 +127,7 @@ def inferFirst(rel_graph, rel_graph_tmp, all_rel, first, second, C):
 
 
 
-def inferSecondPath(rel_graph, all_rel, second, third, file_for_segments, outfile, C):
+def inferSecondPath(rel_graph, rel_graph_tmp, all_rel, second, third, file_for_segments, outfile, C):
     # infer and add 2nd degree relationships
 
     if C:
@@ -143,8 +143,8 @@ def inferSecondPath(rel_graph, all_rel, second, third, file_for_segments, outfil
             elif all_rel[i1][i2][1] < dc_upper: #proportion IBD2 within requirement for DC classification
                 sib1 = getSibsFromGraph(rel_graph,i1)
                 sib2 = getSibsFromGraph(rel_graph,i2)
-                sib1.append(i1)
-                sib2.append(i2)
+                sib1.add(i1)
+                sib2.add(i2)
                 #if one i1 is a DC of i2, then siblings of i1 are DC of siblings of i2 (and i2)
                 for s1 in sib1:
                     for s2 in sib2:
@@ -156,8 +156,8 @@ def inferSecondPath(rel_graph, all_rel, second, third, file_for_segments, outfil
             if all_rel[i1][i2][1] >= dc_lower and all_rel[i1][i2][1] <= dc_upper: #proportion IBD2 within requirement for DC classification
                 sib1 = getSibsFromGraph(rel_graph,i1)
                 sib2 = getSibsFromGraph(rel_graph,i2)
-                sib1.append(i1)
-                sib2.append(i2)
+                sib1.add(i1)
+                sib2.add(i2)
                 # if one i1 is a DC of i2, then siblings of i1 are DC of siblings of i2 (and i2)
                 for s1 in sib1:
                     for s2 in sib2:
@@ -184,8 +184,8 @@ def inferSecondPath(rel_graph, all_rel, second, third, file_for_segments, outfil
 
                 if len(avunc_hs_all):
                     for hs in range(0,len(avunc_hs_all)):
-                        for av in avunc_hs[hs]:
-                            for sib in sibs+halfsibs[hs]:
+                        for av in avunc_hs_all[hs]:
+                            for sib in sibs.union(set(halfsibs[hs])):
                                 if not rel_graph_tmp.has_edge(av, sib):
                                     addEdgeType(av, sib, 'AU', 'NN', rel_graph)  # if the provided family information doesn't contain this relationship, add it
                                 else:
@@ -1353,7 +1353,7 @@ def getSecondDegreeRelatives(all_rel,second,third,sibset):
         if ind1 in sibset:
             check_inds.add(ind2)
         if ind2 in sibset:
-            check_inds.add(ind2)
+            check_inds.add(ind1)
 
     for ind in check_inds:
         if not ind in sibset:
@@ -1365,7 +1365,6 @@ def getSecondDegreeRelatives(all_rel,second,third,sibset):
                     degs.add(all_rel[siblist[k]][ind][3])
             if 2 in degs or 3 in degs:
                 check_for_au.add(ind)
-
 
     return check_for_au
 
@@ -1392,43 +1391,61 @@ def getAuntsUncles_IBD011_nonoverlapping_pairs(all_rel, sibset, halfsibs, second
         for ind in remove_second:
             second.remove(ind)
 
+        second_original = list(second.copy()) #get copy for use with halfsibs later; we'll edit 'second' below
+        second = list(second)
         sibset = list(sibset)
         if len(second):
             for [sib1, sib2] in itertools.combinations(sibset,2):
                 sibseg = collectIBDsegments([sib1,sib2],file_for_segments)
-                for av in second:
+                k = 0
+                while k < len(second):
+                    av = second[k]
                     avsib = collectIBDsegmentsSibsAvuncular([sib1,sib2], [av],file_for_segments)
                     IBD011 = getTotalLength(findOverlap(sibseg, avsib, 0, 1, 1, {}, 0.5))
                     if IBD011 > 50:
                         avunc.add(av)
                         avsibs = getSibsFromGraph(rel_graph, av)
+                        second.remove(av)
                         for avsib in avsibs:
-                            avunc.add(av)
+                            avunc.add(avsib)
+                            second.remove(avsib)
                     elif IBD011 < 20:
+                        second.remove(av)
                         break
+                    else:
+                        k = k + 1
 
             #check with halfsibs
+            second = second_original
             if len(halfsibs):
                 avunc_hs = set()
-                for hs in range(0,len(halfsibs)):
+                for hs in range(0,len(halfsibs)): #hs = index of halfsib set
                     for [sib1,sib2] in itertools.product(sibset,halfsibs[hs]): #all pairs of [sib, halfsib]
-                        sibseg = collectIBDsegments(allsibs[(i * 2):(i * 2 + 2)], file_for_segments)
-                        for av in second:
-                            avsib = collectIBDsegmentsSibsAvuncular(allsibs[(i * 2):(i * 2 + 2)], [av], file_for_segments)
+                        sibseg = collectIBDsegments([sib1,sib2], file_for_segments)
+                        k = 0
+                        while k < len(second):
+                            av = second[k]
+                            avsib = collectIBDsegmentsSibsAvuncular([sib1,sib2], [av], file_for_segments)
                             IBD011 = getTotalLength(findOverlap(sibseg, avsib, 0, 1, 1, {}, 0.5))
                             if IBD011 > 50:
                                 avunc_hs.add(av)
                                 avsibs = getSibsFromGraph(rel_graph, av)
+                                second.remove(av)
                                 for avsib in avsibs:
                                     avunc_hs.add(avsib)
+                                    second.remove(avsib)
                             elif IBD011 < 20:
+                                second.remove(av)
                                 break
-                    avunc_hs_all.append(avunc_hs)
+                            else:
+                                k = k + 1
+                    if len(avunc_hs):
+                        avunc_hs_all.append(avunc_hs)
 
 
 
 
-    return [avunc, avunc_hs]
+    return [avunc, avunc_hs_all]
 
 
 def checkUseHalfsibs(sibs,halfsib_sets,rel,all_rel):
@@ -1436,6 +1453,8 @@ def checkUseHalfsibs(sibs,halfsib_sets,rel,all_rel):
     # sibs = initial set of sibs
     # halfsib_sets = sibs' halfsibs
     # rel = distant relative
+
+    sibs = list(sibs)
 
     if len(halfsib_sets):
         sibmin = 0
