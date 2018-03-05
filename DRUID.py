@@ -14,7 +14,7 @@ import os.path
 
 
 parser=argparse.ArgumentParser(
-    description='''DRUID v0.9.2a -- A multiway relatedness estimator. 2/20/2018.''',
+    description='''DRUID v0.9.2b -- A multiway relatedness estimator. 3/5/2018.''',
     epilog="""Output has extension *.DRUID and contains columns [ind1, ind2, estimated shared IBD proportion (for debugging purposes -- will be removed), DRUID's inferred degree of relatedness, Refined IBD's inferred degree of relatedness (for debugging purposes -- will be removed """)
 parser.add_argument('-o', type=str, nargs=1, default=['out'], help='Output file prefix', metavar='out')
 parser.add_argument('-i', type=str, nargs=1, required=True, help='Pairwise IBD1 & IBD2 proportions file', metavar='file.ibd12')
@@ -58,7 +58,7 @@ inferFirst(rel_graph, rel_graph_tmp, all_rel, first, second, int(args.C[0]))
 
 # infer second degree & aunts/uncles of sibling sets
 print("\nInferring second degree relatives")
-inferSecondPath(rel_graph, all_rel, second, third, args.s[0], args.o[0], int(args.C[0]))
+inferSecondPath(rel_graph, rel_graph_tmp, all_rel, second, third, args.s[0], args.o[0], int(args.C[0]))
 print('\n')
 
 
