@@ -341,6 +341,11 @@ def getIBDsegments(ind1, ind2, file_for_segments):
                     IBD2[chr] = []
                 IBD2[chr].append(seg[0:2]) #only append start and end
 
+
+    return [IBD1, IBD2]  # outputs IBD0, IBD1, IBD2
+
+
+def getIBD0(IBD1,IBD2):
     IBD12 = {} #IBD12 = regions that are IBD (IBD1 or IBD2)
     for chr in IBD1.keys():
         IBD12[chr] = []
@@ -368,7 +373,7 @@ def getIBDsegments(ind1, ind2, file_for_segments):
                     IBD0[chr].append([IBD12[chr][k][1], chrom_ends[chr]])
         IBD0[chr] = mergeIntervals(IBD0[chr][:])
 
-    return [IBD0, IBD1, IBD2]  # outputs IBD0, IBD1, IBD2
+    return IBD0
 
 
 
@@ -392,148 +397,6 @@ def mergeIntervals(intervals):
     return merged
 
 
-
-def combineIBDsegments(sibset):
-    # for a given sibset, collect all of their pairwise IBD0/1/2 regions
-    # then, greedily collect IBD0 regions, IBD1 regions, and then IBD2 regions for comparison with avuncular segments
-    IBD0 = {}
-    IBD1 = {}
-    IBD2 = {}
-    if len(sibset) > 1:
-        for [ind1, ind2] in itertools.combinations(sibset, 2):
-            tmp = getIBDsegments(ind1, ind2)
-            for chr in tmp[0].keys():
-                if not chr in IBD0.keys():
-                    IBD0[chr] = []
-                IBD0[chr].append(tmp[0][chr])
-
-            for chr in tmp[1].keys():
-                if not chr in IBD1.keys():
-                    IBD1[chr] = []
-                IBD1[chr].append(tmp[1][chr])
-
-            for chr in tmp[2].keys():
-                if not chr in IBD2.keys():
-                    IBD2[chr] = []
-                IBD2[chr].append(tmp[2][chr])
-
-        IBD0_all = {}
-        IBD0_new = {}  # as many IBD0 ranges as possible, as large as possible
-        IBD2_all = {}
-        IBD2_new = {}
-        IBD1_all = {}
-        IBD1_new = {}
-        for chr in IBD0.keys():
-            IBD0_all[chr] = []
-            tmp = [y for x in IBD0[chr] for y in x]
-            for k in tmp:
-                IBD0_all[chr].append(k)
-            IBD0_all[chr].sort()
-            IBD0_new[chr] = mergeIntervals(IBD0_all[chr])
-
-        for chr in IBD1.keys():
-            IBD1_all[chr] = []
-            tmp = [y for x in IBD1[chr] for y in x]
-            for k in tmp:
-                IBD1_all[chr].append(k)
-            IBD1_new[chr] = mergeIntervals(IBD1_all[chr])
-
-        for chr in IBD2.keys():
-            IBD2_all[chr] = []
-            tmp = [y for x in IBD2[chr] for y in x]
-            for k in tmp:
-                IBD2_all[chr].append(k)
-            IBD2_new[chr] = mergeIntervals(IBD2_all[chr])
-
-        all_IBD = {}
-        for chr in IBD0_new.keys():
-            all_IBD[chr] = []
-            for k in IBD0_new[chr]:
-                all_IBD[chr].append([k[0], k[1], 0])  # start with all IBD0 segments
-            all_IBD[chr].sort()
-
-        ### WORKS!! ###
-        for chr in IBD1_new.keys():
-            IBD1_new[chr].sort()
-            if not chr in all_IBD.keys():
-                all_IBD[chr] = []
-            k = 0
-            k2 = 0
-            newadd = []
-            full_prev = 0
-            if len(all_IBD[chr]) > 0:
-                while k < len(all_IBD[chr]) - 1 and k2 < len(IBD1_new[chr]):
-                    # print(str(k)+'\t'+str(k2)+'\n')
-                    if IBD1_new[chr][k2][0] <= all_IBD[chr][k][0] and IBD1_new[chr][k2][1] > all_IBD[chr][k][1]:
-                        if full_prev != 1:
-                            newadd.append([IBD1_new[chr][k2][0], min(IBD1_new[chr][k2][1], all_IBD[chr][k][0])])
-                            full_prev = 1
-                        newadd.append([all_IBD[chr][k][1], min(IBD1_new[chr][k2][1], all_IBD[chr][k + 1][0])])
-                        if all_IBD[chr][k + 1][0] <= IBD1_new[chr][k2][1]:
-                            k = k + 1
-
-                    elif IBD1_new[chr][k2][0] < all_IBD[chr][k][0]:
-                        newadd.append([IBD1_new[chr][k2][0], min(IBD1_new[chr][k2][1], all_IBD[chr][k][0])])
-                        full_prev = 0
-                        k2 = k2 + 1
-
-                    elif IBD1_new[chr][k2][1] > all_IBD[chr][k][1]:
-                        newadd.append([all_IBD[chr][k][1], min(IBD1_new[chr][k2][1], all_IBD[chr][k + 1][0])])
-                        k = k + 1
-                        full_prev = 1
-                        if all_IBD[chr][k][1] > IBD1_new[chr][k2][1]:
-                            k2 = k2 + 1
-
-                    elif IBD1_new[chr][k2][0] >= all_IBD[chr][k][0] and IBD1_new[chr][k2][1] <= all_IBD[chr][k][1]:
-                        k2 = k2 + 1
-                        full_prev = 0
-
-                    if k < len(all_IBD[chr]) - 1 and k2 < len(IBD1_new[chr]):
-                        while IBD1_new[chr][k2][1] < all_IBD[chr][k + 1][0]:
-                            k2 = k2 + 1
-                            if k2 >= len(IBD1_new[chr]):
-                                break
-
-                while k2 < len(IBD1_new[chr]):
-                    if IBD1_new[chr][k2][0] > all_IBD[chr][len(all_IBD[chr]) - 1][1]:
-                        newadd.append([IBD1_new[chr][k2][0], IBD1_new[chr][k2][1]])
-                    elif IBD1_new[chr][k2][1] > all_IBD[chr][len(all_IBD[chr]) - 1][1]:
-                        newadd.append(
-                            [max(all_IBD[chr][len(all_IBD[chr]) - 1][1], IBD1_new[chr][k2][0]), IBD1_new[chr][k2][1]])
-                    k2 = k2 + 1
-
-                for seg in newadd:
-                    all_IBD[chr].append([seg[0], seg[1], 1])
-
-            else:
-                for seg in IBD1_new[chr]:
-                    all_IBD[chr].append([seg[0], seg[1], 1])
-
-            all_IBD[chr].sort()
-
-        # Add IBD2
-        for chr in range(1, 23):
-            newadd = []
-            if chr in all_IBD.keys():
-                for k in range(0, len(all_IBD[chr]) - 1):
-                    if all_IBD[chr][k][1] < all_IBD[chr][k + 1][0] - 1:
-                        newadd.append([all_IBD[chr][k][1] + 1, all_IBD[chr][k + 1][0] - 1])
-            else:
-                all_IBD[chr] = []
-                newadd.append([chrom_starts[chr], chrom_ends[chr]])
-
-            for seg in newadd:
-                all_IBD[chr].append([seg[0], seg[1], 2])
-
-            all_IBD[chr].sort()
-    else:
-        all_IBD = {}
-        for chr in range(1,23):
-            all_IBD[chr] = []
-
-    return all_IBD
-
-
 def collectIBDsegments(sibset,file_for_segments):
     # collect pairwise IBD0,1,2 regions between all pairs of siblings
     IBD_all = {}
@@ -544,12 +407,13 @@ def collectIBDsegments(sibset,file_for_segments):
         IBD_all[ind1][ind2] = []
 
         tmp = getIBDsegments(ind1, ind2,file_for_segments)
+        tmp0 = getIBD0(tmp[0],tmp[1])
+        for chr in tmp0.keys():
+            tmp0[chr].sort()
         for chr in tmp[0].keys():
             tmp[0][chr].sort()
         for chr in tmp[1].keys():
             tmp[1][chr].sort()
-        for chr in tmp[2].keys():
-            tmp[2][chr].sort()
 
         IBD_all[ind1][ind2] = tmp
 
@@ -565,22 +429,23 @@ def collectAllIBDsegments(sibset):
     IBD2 = {}
     for [ind1, ind2] in itertools.combinations(sibset, 2):
         tmp = getIBDsegments(ind1, ind2)
-        for chr in tmp[0].keys():
+        tmp0 = getIBD0(tmp[0],tmp[1])
+        for chr in tmp0.keys():
             if not chr in IBD0.keys():
                 IBD0[chr] = []
-            for seg in tmp[0][chr]:
+            for seg in tmp0[chr]:
                 IBD0[chr].append(seg)
 
-        for chr in tmp[1].keys():
+        for chr in tmp[0].keys():
             if not chr in IBD1.keys():
                 IBD1[chr] = []
-            for seg in tmp[1][chr]:
+            for seg in tmp[0][chr]:
                 IBD1[chr].append(seg)
 
-        for chr in tmp[2].keys():
+        for chr in tmp[1].keys():
             if not chr in IBD2.keys():
                 IBD2[chr] = []
-            for seg in tmp[2][chr]:
+            for seg in tmp[1][chr]:
                 IBD2[chr].append(seg)
 
     for chr in IBD0.keys():
@@ -605,14 +470,15 @@ def collectIBDsegmentsSibsAvuncular(sibset, avunc,file_for_segments):  # n is nu
                 IBD_all[ind1][ind2] = []
 
             tmp = getIBDsegments(ind1, ind2,file_for_segments)
+            tmp0 = getIBD0(tmp[0],tmp[1])
+            for chr in tmp0.keys():
+                tmp0[chr].sort()
             for chr in tmp[0].keys():
                 tmp[0][chr].sort()
             for chr in tmp[1].keys():
                 tmp[1][chr].sort()
-            for chr in tmp[2].keys():
-                tmp[2][chr].sort()
 
-            IBD_all[ind1][ind2] = tmp
+            IBD_all[ind1][ind2] = [tmp0,tmp[0],tmp[1]]
 
     return IBD_all
 
@@ -625,26 +491,19 @@ def collectIBDsegmentsSibsAvuncularCombine(sibset, avunc, file_for_segments):
     for ind1 in sibset:
         IBD_all[ind1] = {}
         IBD_all[ind1]['A'] = []
-        IBD0 = {}
-        IBD1 = {}
-        IBD2 = {}
         for ind2 in avunc:
-            tmp = getIBDsegments(ind1, ind2, file_for_segments)
+            tmp = getIBDsegments(ind1, ind2, file_for_segments) #[IBD1, IBD2]
             for chr in tmp[0].keys():
                 tmp[0][chr].sort()
             for chr in tmp[1].keys():
                 tmp[1][chr].sort()
-            for chr in tmp[2].keys():
-                tmp[2][chr].sort()
 
         for chr in tmp[0].keys():
             tmp[0][chr] = mergeIntervals(tmp[0][chr].copy())
         for chr in tmp[1].keys():
             tmp[1][chr] = mergeIntervals(tmp[1][chr].copy())
-        for chr in tmp[2].keys():
-            tmp[2][chr] = mergeIntervals(tmp[2][chr].copy())
 
-        IBD_all[ind1]['A'] = tmp
+        IBD_all[ind1]['A'] = [{},tmp[0],tmp[1]] #return IBD1, IBD2
 
     return IBD_all
 
@@ -847,7 +706,7 @@ def getSiblingRelativeFamIBDLengthIBD2(sib1, sib2, avunc1, avunc2, file_for_segm
         for ind2 in sibandav_rel:
             tmp = getIBDsegments(ind1, ind2, file_for_segments)
             # mark if these individuals have segments that were used
-            if tmp != [{},{},{}]:
+            if tmp != [{},{}]:
                 if ind1 in sib1:
                     has_seg_sib1[sib1.index(ind1)] = 1
                 elif ind1 in avunc1:
@@ -856,15 +715,15 @@ def getSiblingRelativeFamIBDLengthIBD2(sib1, sib2, avunc1, avunc2, file_for_segm
                     has_seg_sib2[sib2.index(ind2)] = 1
                 elif ind2 in avunc2:
                     has_seg_avunc2[avunc2.index(ind2)] = 1
-            for chr in tmp[1].keys():  # add IBD1
+            for chr in tmp[0].keys():  # add IBD1
                 if not chr in all_seg_IBD1.keys():
                     all_seg_IBD1[chr] = []
-                for seg in tmp[1][chr]:
+                for seg in tmp[0][chr]:
                     all_seg_IBD1[chr].append(seg)
-            for chr in tmp[2].keys():  # add IBD2
+            for chr in tmp[1].keys():  # add IBD2
                 if not chr in all_seg_IBD2.keys():
                     all_seg_IBD2[chr] = []
-                for seg in tmp[2][chr]:
+                for seg in tmp[1][chr]:
                     all_seg_IBD2[chr].append(seg)
 
     IBD_sum = 0
