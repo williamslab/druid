@@ -14,7 +14,7 @@ import os.path
 
 
 parser=argparse.ArgumentParser(
-    description='''DRUID v0.9.2b -- A multiway relatedness estimator. 3/5/2018.''',
+    description='''DRUID v0.9.2c -- A multiway relatedness estimator. 3/5/2018.''',
     epilog="""Output has extension *.DRUID and contains columns [ind1, ind2, estimated shared IBD proportion (for debugging purposes -- will be removed), DRUID's inferred degree of relatedness, Refined IBD's inferred degree of relatedness (for debugging purposes -- will be removed """)
 parser.add_argument('-o', type=str, nargs=1, default=['out'], help='Output file prefix', metavar='out')
 parser.add_argument('-i', type=str, nargs=1, required=True, help='Pairwise IBD1 & IBD2 proportions file', metavar='file.ibd12')

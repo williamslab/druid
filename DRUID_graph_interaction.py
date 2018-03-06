@@ -41,8 +41,8 @@ def getRelationship(tmp_graph,ind1,ind2):
                         type2 = tmp_graph.get_edge_data(indsecond,indthird)['type']
                     else:
                         type2 = -1
-                    # if traveling to other lineage, stop
-                    if (type1 == 'P' and type2 == 'C') or (type1 == 'GP' and type2 == 'GC') or (type1 == 'P' and type2 == 'GC') or (type1 == 'GP' and type2 == 'C') or (type1 == 'C' and type2 == 'P') or (type1 == 'GC' and type2 == 'GP') or (type1 == 'C' and type2 == 'GP') or (type1 == 'GC' and type2 == 'P') or (type1 == 'C' and type2 == 'AU') or (type1 == 'GC' and type2 == 'AU') or (type1 == 'P' and type2 == 'NN') or (type1 == 'GP' and type2 == 'NN'):
+                    # check if we are (possibly) traveling to other lineage, and if so, stop
+                    if (type1 == 'P' and type2 == 'C') or (type1 == 'GP' and type2 == 'GC') or (type1 == 'P' and type2 == 'GC') or (type1 == 'GP' and type2 == 'C') or (type1 == 'C' and type2 == 'P') or (type1 == 'GC' and type2 == 'GP') or (type1 == 'C' and type2 == 'GP') or (type1 == 'GC' and type2 == 'P') or (type1 == 'C' and type2 == 'AU') or (type1 == 'GC' and type2 == 'AU') or (type1 == 'P' and type2 == 'NN') or (type1 == 'GP' and type2 == 'NN') or (type1 == 'NN' and type2 == 'AU') or (type1 == 'AU' and type2 == 'NN'):
                         total = -1
                         i = len(path) + 1
                     elif (type1 == 'AU' and type2 == 'C'):
@@ -121,9 +121,9 @@ def checkIfSib(tmp_graph,ind1,ind2):
 
 
 def checkIfParentInGraph(tmp_graph,ind1,ind2):
-    #determine whether there's an edge labeled 'FS' between ind1 and ind2
+    #determine whether ind1 is the child of ind2
     type = tmp_graph.get_edge_data(ind1,ind2)['type']
-    if type == 'P':
+    if type == 'C':
         return 1
     else:
         return 0
@@ -205,6 +205,47 @@ def getSibsAndHalfSibsFromGraph(tmp_graph,ind):
         halfsib_sets.append(halfsib_set)
 
     return [sibs, halfsib_sets]
+
+
+def getSibsParentsFromGraph(tmp_graph,ind):
+    #return the siblings and half-sibs of ind
+    par = set()
+    sibs = set()
+    neighbors = tmp_graph.neighbors(ind)
+    for x in neighbors:
+        if tmp_graph.get_edge_data(ind,x)['type'] == 'FS':
+            sibs.add(x)
+        elif tmp_graph.get_edge_data(ind,x)['type'] == 'C':
+            par.add(x)
+
+    return [sibs, par]
+
+def getSibsHalfSibsParentsFromGraph(tmp_graph,ind):
+    #return the siblings and half-sibs of ind
+    hs = set()
+    sibs = set()
+    par = set()
+    neighbors = tmp_graph.neighbors(ind)
+    for x in neighbors:
+        if tmp_graph.get_edge_data(ind,x)['type'] == 'HS':
+            hs.add(x)
+        elif tmp_graph.get_edge_data(ind,x)['type'] == 'FS':
+            sibs.add(x)
+        elif tmp_graph.get_edge_data(ind,x)['type'] == 'C':
+            par.add(x)
+
+    halfsib_sets = []
+    hs = list(hs)
+    while len(hs):
+        hssibs = getSibsFromGraph(tmp_graph, hs[0])
+        halfsib_set = [hs[0]]
+        for ind_sib in hssibs:
+            halfsib_set.append(ind_sib)
+            hs.remove(ind_sib)
+        hs.remove(hs[0])
+        halfsib_sets.append(halfsib_set)
+
+    return [sibs, halfsib_sets, par]
 
 
 
@@ -359,19 +400,11 @@ def checkAuntUncleGPRelationships(tmp_graph,siblings,par):
             [sibpar, avunc_bothsides, nn, parpar, childpar, pc, gppar, halfsib_sets, twins] = pullFamily(tmp_graph, p)
             for sib in siblings:
                 for sp in sibpar:
-                    if not tmp_graph.has_edge(sib, sp):
-                        tmp_graph.add_edge(sib, sp)
-                        tmp_graph.add_edge(sp, sib)
-                    tmp_graph.get_edge_data(sib,sp)['type'] = 'NN'
-                    tmp_graph.get_edge_data(sp,sib)['type'] = 'AU'
+                    addEdgeType(sib,sp,'NN','AU',tmp_graph)
             if parpar != []:
                 for sib in siblings:
                     for pp in parpar:
-                        if not tmp_graph.has_edge(sib,pp):
-                            tmp_graph.add_edge(sib,pp)
-                            tmp_graph.add_edge(pp,sib)
-                        tmp_graph.get_edge_data(sib, pp)['type'] = 'GC'
-                        tmp_graph.get_edge_data(pp, sib)['type'] = 'GP'
+                        addEdgeType(sib,pp,'GC','GP',tmp_graph)
 
 
 def getAuntsUnclesFromGraph(tmp_graph,ind):
@@ -433,9 +466,18 @@ def pullFamily(tmp_graph,ind):
             elif edge_info == 'PC':
                 pc.add(edge[1])
     avunc_sets = []
-    tmp=tmp_graph.subgraph(avunc)
-    for x in nx.strongly_connected_components(tmp):
-        avunc_sets.append(list(x))
+    # tmp=tmp_graph.subgraph(avunc)
+    # for x in nx.strongly_connected_components(tmp):
+    #     avunc_sets.append(list(x))
+    checked = set()
+    for ind in avunc:
+        if not ind in checked:
+            av_sibs = getSibsFromGraph(tmp_graph, ind)
+            av_sibs.add(ind)
+            avunc_sets.append(av_sibs)
+            checked = checked.union(av_sibs)
+
+
 
     halfsib_sets = []
     halfsibs = list(halfsibs)
