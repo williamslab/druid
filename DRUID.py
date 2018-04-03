@@ -14,8 +14,10 @@ import os.path
 
 
 parser=argparse.ArgumentParser(
-    description='''DRUID v0.9.2c -- A multiway relatedness estimator. 3/5/2018.''',
-    epilog="""Output has extension *.DRUID and contains columns [ind1, ind2, estimated shared IBD proportion (for debugging purposes -- will be removed), DRUID's inferred degree of relatedness, Refined IBD's inferred degree of relatedness (for debugging purposes -- will be removed """)
+    description='''DRUID v0.9.3a -- A multiway relatedness estimator. 3/29/2018.''',
+    epilog="""Outputs file with extension *.DRUID and contains columns [ind1, ind2, DRUID's inferred degree of relatedness, input pairwise IBD1/2 proportions file's inferred degree of relatedness.
+     With flag -F, can also output PLINK format .fam files containing first and second degree relationships types which were inferred/provided, outputting multiple .fam files in cases when a parent-child pair is found, but there is not
+     enough information to determine who is the parent and who is the child""")
 parser.add_argument('-o', type=str, nargs=1, default=['out'], help='Output file prefix', metavar='out')
 parser.add_argument('-i', type=str, nargs=1, required=True, help='Pairwise IBD1 & IBD2 proportions file', metavar='file.ibd12')
 parser.add_argument('-s', type=str, nargs=1, required=True, help='Pairwise IBD segments file', metavar='file.seg')
@@ -23,6 +25,7 @@ parser.add_argument('-m', type=str, nargs=1, required=True, help='Map file (PLIN
 parser.add_argument('-f', type=str, nargs=1, default=[''], help="Known first (FS/P/C) and second degree relationships (AU/NN/GP/GC/HS), columns: ind1/ind2/ind1's relation to ind2",metavar='file.faminfo')
 parser.add_argument('-u', type=str, nargs=1, default=[''], help='File containing individuals to include', metavar='file.inds')
 parser.add_argument('-C', type=int, nargs=1, default=[0], help='Whether to run DRUID in normal mode (0) or conservative mode (1); default is 0', metavar='0/1')
+parser.add_argument('-F', type=int, nargs=1, default=[0], help='Whether to output fam files (PLINK format) containing inferred/provided relationship types; default is 0', metavar='0/1')
 
 args=parser.parse_args()
 
@@ -35,6 +38,10 @@ if args.f[0] != '':
     print("Including family info from "+args.f[0])
 if args.u[0] != '':
     print("Including inds from "+args.u[0])
+if args.F[0]:
+    print("Print fam files = TRUE")
+else:
+    print("Print fam files = FALSE")
 
 # Get map info
 global total_genome, chrom_starts, chrom_ends
@@ -64,8 +71,12 @@ print('\n')
 
 all_results = runDRUID(rel_graph, all_rel, inds, args)
 
+if args.F[0] == 1:
+    print("\nPrinting .fam files")
+    fillInGraph(rel_graph)
 
 
+print("\nPrinting DRUID results")
 outfile_results = open(args.o[0]+'.DRUID','w')
 outfile_results.write("ind1\tind2\tDRUID\tRefinedIBD\tMethod\n")
 for res in all_results:

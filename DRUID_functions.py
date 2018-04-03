@@ -50,6 +50,7 @@ def inferFirst(rel_graph, rel_graph_tmp, all_rel, first, second, C):
     sibsets = [] #collect list of sets of siblings
     for node in rel_graph.nodes():
         if not node in checked:
+            #print(node+'\n')
             siblings = getSibsFromGraph(rel_graph,node)
             siblings.add(node)
 
@@ -91,38 +92,30 @@ def inferFirst(rel_graph, rel_graph_tmp, all_rel, first, second, C):
 
 
             #check if other siblings also have this neighbor and are labeled as '1'
-            par = set()
-            pc = []
             if len(inds_to_check):
                 for ind in inds_to_check:
                     if checkIfParent(rel_graph, all_rel, siblings, ind, C):
                         if len(siblings) == 1: #only 1 parent or child, give the pair generic PC label
                             siblings_pc = getSibsFromGraph(rel_graph, ind)
-                            if len(siblings_pc): #if the other individual has siblings, then the individual in "siblings" must be the child of "ind"
-                                par.add(list(siblings)[0])
+                            if len(siblings_pc) and not any([x in inds_to_check for x in siblings]): #if the other individual has siblings, then the individual in "siblings" must be the child of "ind"
+                                for s in siblings_pc: #add ind and his/her siblings as child of siblings[0]
+                                    addEdgeType(list(siblings)[0], s, 'P', 'C', rel_graph)
                             else:
-                                pc.append([list(siblings)[0],ind])
+                                addEdgeType(ind, list(siblings)[0], 'PC', 'PC', rel_graph)
                         else:
-                            par.add(ind)
-
-            for ind in par:
-                for sib in siblings:
-                    addEdgeType(ind, sib, 'P', 'C', rel_graph)
-
-
-            for [ind1,ind2] in pc:
-                addEdgeType(ind1, ind2, 'PC', 'PC', rel_graph)
+                            for sib in sibslings: #add ind as parent for each sibling
+                                addEdgeType(ind, sib, 'P', 'C', rel_graph)
 
     for sibset in sibsets:
         sibset = list(sibset)
-        pars = getParent(rel_graph,sibset[0])
+        pars = getParent(rel_graph,sibset[0]) #parents of sibset
         for par in pars:
-            [sib_par,par_par] = getSibsParentsFromGraph(rel_graph,par)
+            [sib_par,par_par] = getSibsParentsFromGraph(rel_graph,par) #parents of parents of sibset (gp)
             for sib in sibset:
-                for sp in sib_par:
+                for sp in sib_par: #for each sibling of the parent
                     if not rel_graph.has_edge(sib,sp):
                         addEdgeType(sib,sp,'NN','AU',rel_graph)
-                for pp in par_par:
+                for pp in par_par: #for each parent of the parent
                     if not rel_graph.has_edge(sib, pp):
                         addEdgeType(sib,pp,'GC','GP',rel_graph)
 
@@ -136,20 +129,32 @@ def inferFirst(rel_graph, rel_graph_tmp, all_rel, first, second, C):
             rel_graph.add_edge(edge[0],edge[1])
             rel_graph[edge[0]][edge[1]]['type'] = rel_graph_tmp.get_edge_data(edge[0], edge[1])['type']
         elif rel_graph_tmp.get_edge_data(edge[0], edge[1])['type'] != rel_graph.get_edge_data(edge[0], edge[1])['type']:
-            print("Warning: Unable to confirm " + edge[0] + " and " + edge[1] + " as " + str(rel_graph.get_edge_data(edge[0], edge[1])['type']) + " but including as such")
+            print("Warning: Unable to confirm " + edge[0] + " and " + edge[1] + " as " + str(rel_graph_tmp.get_edge_data(edge[0], edge[1])['type']) + " but including as such")
             rel_graph[edge[0]][edge[1]]['type'] = rel_graph_tmp.get_edge_data(edge[0], edge[1])['type']
 
+    # #ensure sibsets have same relatives
+    # for sibset in sibsets:
+    #     #collect neighbors of the sibs
+    #     neighbor_set = set()
+    #     for ind in sibset:
+    #         nei = rel_graph.neighbors(ind)
+    #         for n in nei:
+    #             neighbor_set = neighbor_set.union((set(n,rel_graph.get_edge_data(ind,n)['type'])))
+    #     for n in neighbor_set:
+    #         for ind in sibset:
+    #             if not rel_graph.has_edge(ind,n):
+    #                 addEdgeType
 
 
 def inferSecondPath(rel_graph, rel_graph_tmp, all_rel, second, third, file_for_segments, outfile, C):
     # infer and add 2nd degree relationships
 
     if C:
-        dc_lower = 0.1 #minimum IBD2 for DC classification
+        dc_lower = 1/2.0**(9/2.0) #minimum IBD2 for DC classification
         dc_upper = 1
     else:
         dc_lower = 1/2.0**(9/2.0)
-        dc_upper = 1/2.0**(11/2.0)
+        dc_upper = 1
     for [i1, i2] in second:
         if not rel_graph.has_edge(i1, i2):
             if all_rel[i1][i2][1] < dc_lower: #proportion IBD2 less than requirement for DC classification
@@ -184,7 +189,7 @@ def inferSecondPath(rel_graph, rel_graph_tmp, all_rel, second, third, file_for_s
             sibs.add(node)
 
             if len(sibs) > 1:
-                print('TESTING '+" ".join(sibs)+'\n')
+                #print('TESTING '+" ".join(sibs)+'\n')
                 second_av = getSecondDegreeRelatives(rel_graph,all_rel,second,third,sibs,par)
                 [avunc, avunc_hs_all] = getAuntsUncles_IBD011_nonoverlapping_pairs(all_rel, sibs, halfsibs, second_av, file_for_segments, rel_graph)
 
@@ -212,7 +217,7 @@ def inferSecondPath(rel_graph, rel_graph_tmp, all_rel, second, third, file_for_s
     checked = set()
     for node in rel_graph.nodes():
         if not node in checked:
-            [siblings, avunc_bothsides, nn, par, child, pc, gp, halfsib_sets, twins] = pullFamily(rel_graph, node)
+            [siblings, avunc_bothsides, nn, par, child, pc, gp, gc, halfsib_sets, twins] = pullFamily(rel_graph, node)
             siblings.add(node)
             checkAuntUncleGPRelationships(rel_graph, siblings, par)
             checked = checked.union(siblings)
@@ -1409,8 +1414,8 @@ def runDRUID(rel_graph, all_rel, inds, args):
                     type = '1'
                 results = results + [[ind1, ind2, type, refined, 'graph']]
             else:
-                [sib1, avunc1_bothsides, nn1, par1, child1, pc1, gp1, halfsib1_sets, twins1] = pullFamily(rel_graph, ind1)
-                [sib2, avunc2_bothsides, nn2, par2, child2, pc2, gp2, halfsib2_sets, twins2] = pullFamily(rel_graph, ind2)
+                [sib1, avunc1_bothsides, nn1, par1, child1, pc1, gp1, gc1, halfsib1_sets, twins1] = pullFamily(rel_graph, ind1)
+                [sib2, avunc2_bothsides, nn2, par2, child2, pc2, gp2, gc2, halfsib2_sets, twins2] = pullFamily(rel_graph, ind2)
                 sib1.add(ind1)
                 sib2.add(ind2)
                 hs1 = checkUseHalfsibs(sib1, halfsib1_sets, ind2, all_rel)
@@ -1437,7 +1442,7 @@ def runDRUID(rel_graph, all_rel, inds, args):
                         moves1.append(getRelationship(rel_graph,ind1_new, ind1))
                         moves_inds1.append(ind1)
                         ind1 = ind1_new
-                        [sib1, avunc1_bothsides, nn1, par1, child1, pc1, gp1, halfsib1_sets, twins1] = pullFamily(rel_graph, ind1)
+                        [sib1, avunc1_bothsides, nn1, par1, child1, pc1, gp1, gc1, halfsib1_sets, twins1] = pullFamily(rel_graph, ind1)
                         sib1.add(ind1)
                         ind1_new = checkForMoveUp(all_rel,ind1, sib1, gp1.union(par1), pc1, sib2)
 
@@ -1447,7 +1452,7 @@ def runDRUID(rel_graph, all_rel, inds, args):
                             ind1 = same[0]
                         else:
                             ind1 = anyIn(pc1,sib2)[0]
-                        [sib1, avunc1_bothsides, nn1, par1, child1, pc1, gp1, halfsib1_sets, twins1] = pullFamily(rel_graph, ind1)
+                        [sib1, avunc1_bothsides, nn1, par1, child1, pc1, gp1, gc1, halfsib1_sets, twins1] = pullFamily(rel_graph, ind1)
                     else:
                         # check if ind2 has parents/grandparentsmore closely related to other set of individuals
                         ind2_original = ind2
@@ -1461,7 +1466,7 @@ def runDRUID(rel_graph, all_rel, inds, args):
                             moves2.append(getRelationship(rel_graph, ind2_new, ind2))
                             moves_inds2.append(ind2)
                             ind2 = ind2_new
-                            [sib2, avunc2_bothsides, nn2, par2, child2, pc2, gp2, halfsib2_sets, twins2] = pullFamily(rel_graph, ind2)
+                            [sib2, avunc2_bothsides, nn2, par2, child2, pc2, gp2, gc2, halfsib2_sets, twins2] = pullFamily(rel_graph, ind2)
                             sib2.add(ind2)
                             ind2_new = checkForMoveUp(all_rel,ind2, sib2, gp2.union(par2), pc2, sib1)
 
@@ -1471,7 +1476,7 @@ def runDRUID(rel_graph, all_rel, inds, args):
                                 ind2 = same[0]
                             else:
                                 ind2 = anyIn(pc2,sib1)[0]
-                            [sib2, avunc2_bothsides, nn2, par2, child2, pc2, gp2, halfsib2_sets, twins2] = pullFamily(rel_graph, ind2)
+                            [sib2, avunc2_bothsides, nn2, par2, child2, pc2, gp2, gc2, halfsib2_sets, twins2] = pullFamily(rel_graph, ind2)
 
                     # ind1 and ind2 can't be related via graph, otherwise they'd be considered above
                     # continue onto composite relatedness method
@@ -1522,7 +1527,7 @@ def runDRUID(rel_graph, all_rel, inds, args):
                                     old_ind1 = ind1
                                     sib1 = getLargestSibsets(rel_graph, nn1)
                                     ind1 = list(sib1)[0]
-                                    [sib1, avunc1_bothsides, nn1, par1, child1, pc1, gp1, halfsib1_sets, twins1] = pullFamily(rel_graph, ind1)
+                                    [sib1, avunc1_bothsides, nn1, par1, child1, pc1, gp1, gc1, halfsib1_sets, twins1] = pullFamily(rel_graph, ind1)
                                     sib1.add(ind1)
                                     [relavunc1, relavunc2, unused1, unused2] = checkRelevantAuntsUncles(sib1, sib2, avunc1_bothsides, avunc2_bothsides, par1, par2)
                                     if not old_ind1 in relavunc1:
@@ -1536,7 +1541,7 @@ def runDRUID(rel_graph, all_rel, inds, args):
                                     old_ind2 = ind2
                                     sib2 = getLargestSibsets(rel_graph,nn2)
                                     ind2 = list(sib2)[0]
-                                    [sib2, avunc2_bothsides, nn2, par2, child2, pc2, gp2, halfsib2_sets, twins2] = pullFamily(rel_graph, ind2)
+                                    [sib2, avunc2_bothsides, nn2, par2, child2, pc2, gp2, gc2, halfsib2_sets, twins2] = pullFamily(rel_graph, ind2)
                                     sib2.add(ind2)
                                     [relavunc1, relavunc2, unused1, unused2] = checkRelevantAuntsUncles(sib1, sib2, avunc1_bothsides, avunc2_bothsides, par1, par2)
                                     if not old_ind2 in relavunc2:
@@ -1547,7 +1552,7 @@ def runDRUID(rel_graph, all_rel, inds, args):
                                     unused_check = set()
                                     for i1 in unused1:
                                         if not i1 in unused_check:
-                                            [sib1u, avunc1u_bothsides, nn1u, par1u, child1u, pc1u, gp1u, halfsib1u_sets, twins1u] = pullFamily(rel_graph, i1)
+                                            [sib1u, avunc1u_bothsides, nn1u, par1u, child1u, pc1u, gp1u, gc1u, halfsib1u_sets, twins1u] = pullFamily(rel_graph, i1)
                                             sib1u.add(i1)
                                             unused_check = unused_check.union(sib1u)
                                             results = results + combineBothGPsKeepProportionOnlyExpectation(sib1u, [], pc1, sib2, [], pc2, args.s[0], args.i[0], rel_graph)
@@ -1555,7 +1560,7 @@ def runDRUID(rel_graph, all_rel, inds, args):
                                     unused_check = set()
                                     for i2 in unused2:
                                         if not i2 in unused_check:
-                                            [sib2u, avunc2u_bothsides, nn2u, par2u, child2u, pc1u, gp2u, halfsib2u_sets, twins2u] = pullFamily(rel_graph, i2)
+                                            [sib2u, avunc2u_bothsides, nn2u, par2u, child2u, pc2u, gp2u, gc2u, halfsib2u_sets, twins2u] = pullFamily(rel_graph, i2)
                                             sib2u.add(ind2)
                                             unused_check = unused_check.union(sib2u)
                                             results = results + combineBothGPsKeepProportionOnlyExpectation(sib1, [], pc1, sib2u, [], pc2, args.s[0], args.i[0], rel_graph)
@@ -1601,7 +1606,7 @@ def runDRUID(rel_graph, all_rel, inds, args):
                                 results.append([moves_inds1[ii],ind2,total,refined, 'graph+inferred'])
                                 addToChecked(moves_inds1[ii],ind2,checked)
                             #check for close relatives of moves_inds[ii]
-                            [sib1, avunc1_bothsides, nn1, par1, child1, pc1, gp1, halfsib1_sets, twins1] = pullFamily(rel_graph, moves_inds1[ii])
+                            [sib1, avunc1_bothsides, nn1, par1, child1, pc1, gp1, gc1, halfsib1_sets, twins1] = pullFamily(rel_graph, moves_inds1[ii])
                             for s1 in sib1:
                                 if s1 < ind2:
                                     refined = all_rel[s1][ind2][3]
@@ -1631,7 +1636,7 @@ def runDRUID(rel_graph, all_rel, inds, args):
                                         addToChecked(p,ind2,checked)
 
                         total = int(closest_result[2])
-                        [sib1, avunc1_bothsides, nn1, par1, child1, pc1, gp1, halfsib1_sets, twins1] = pullFamily(rel_graph, ind1) #get set of close relatives of ind1
+                        [sib1, avunc1_bothsides, nn1, par1, child1, pc1, gp1, gc1, halfsib1_sets, twins1] = pullFamily(rel_graph, ind1) #get set of close relatives of ind1
                         sib1.add(ind1)
                         for ii in range(len(moves2)-1,-1,-1):
                             if moves2[ii] in ['P','C','PC']:
@@ -1647,7 +1652,7 @@ def runDRUID(rel_graph, all_rel, inds, args):
                                     results.append([s1,moves_inds2[ii],total,refined, 'graph+inferred'])
                                     addToChecked(s1,moves_inds2[ii],checked)
                                 #check for close relatives of moves_inds[ii]
-                                [sib2, avunc2_bothsides, nn2, par2, child2, pc2, gp2, halfsib2_sets, twins2] = pullFamily(rel_graph, moves_inds2[ii])
+                                [sib2, avunc2_bothsides, nn2, par2, child2, pc2, gp2, gc2, halfsib2_sets, twins2] = pullFamily(rel_graph, moves_inds2[ii])
                                 for s2 in sib2:
                                     if s2 < s1:
                                         refined = all_rel[s2][s1][3]
@@ -1673,7 +1678,7 @@ def runDRUID(rel_graph, all_rel, inds, args):
                                         else:
                                             refined = all_rel[s1][p][3]
                                         if not [s1,p] in checked:
-                                            results.append([s1, p, total+1, 'graph+inferred'])
+                                            results.append([s1, p, total+1, refined, 'graph+inferred'])
                                             addToChecked(s1,p,checked)
 
                         if len(moves1) and len(moves2):
@@ -1697,8 +1702,8 @@ def runDRUID(rel_graph, all_rel, inds, args):
                                         addToChecked(moves_inds1[i1],moves_inds2[i2],checked)
 
                                     # check for close relatives of moves_inds[ii]
-                                    [sib1, avunc1_bothsides, nn1, par1, child1, pc1, gp1, halfsib1_sets, twins1] = pullFamily(rel_graph, moves_inds1[i1])
-                                    [sib2, avunc2_bothsides, nn2, par2, child2, pc2, gp2, halfsib2_sets, twins2] = pullFamily(rel_graph, moves_inds2[i2])
+                                    [sib1, avunc1_bothsides, nn1, par1, child1, pc1, gp1, gc1, halfsib1_sets, twins1] = pullFamily(rel_graph, moves_inds1[i1])
+                                    [sib2, avunc2_bothsides, nn2, par2, child2, pc2, gp2, gc2, halfsib2_sets, twins2] = pullFamily(rel_graph, moves_inds2[i2])
                                     for s1 in sib1:
                                         if s1 < moves_inds2[i2]:
                                             refined = all_rel[s1][moves_inds2[i2]][3]

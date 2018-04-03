@@ -101,7 +101,7 @@ def getLargestSibsets(tmp_graph,all_inds):
     checked = set()
     for ind in all_inds:
         if not ind in checked:
-            [sib, avunc_bothsides, nn, par, child, pc, gp, halfsib_sets, twins] = pullFamily(tmp_graph, ind)
+            [sib, avunc_bothsides, nn, par, child, pc, gp, gc, halfsib_sets, twins] = pullFamily(tmp_graph, ind)
             sib.add(ind)
             checked = checked.union(sib)
             sibsets.append(sib)
@@ -138,12 +138,12 @@ def checkIfParent(tmp_graph,all_rel,sibset,ind, C):
             sib = list(sibset)[0]
             if sib < ind:
                 if all_rel[sib][ind][1] < 0.05: #very little IBD2
-                    par = 1 #return 1 to give generic PC categorization to pair later
+                    return 1 #return 1 to give generic PC categorization to pair later
                 else:
                     return 0
             else:
                 if all_rel[ind][sib][1] < 0.05:
-                    par = 1
+                    return 1
                 else:
                     return 0
     else:
@@ -151,12 +151,10 @@ def checkIfParent(tmp_graph,all_rel,sibset,ind, C):
         for sib in sibset:
             if sib < ind:
                 if not (sib,ind) in tmp_graph.edges(sib) or not tmp_graph.get_edge_data(sib,ind)['type'] == '1U' or not float(all_rel[sib][ind][1]) < 1/2.0**(7/2.0):
-                    par = 0
-                    break
+                    return 0
             else:
                 if not (sib,ind) in tmp_graph.edges(sib) or not tmp_graph.get_edge_data(sib,ind)['type'] == '1U' or not float(all_rel[ind][sib][1]) < 1/2.0**(7/2.0):
-                    par = 0
-                    break
+                    return 0
 
     return par
 
@@ -393,7 +391,7 @@ def checkAuntUncleGPRelationships(tmp_graph,siblings,par):
     # ensure the siblings of 'par' are listed as aunts/uncles of 'siblings' (par = parent of siblings)
     if par!= []:
         for p in par:
-            [sibpar, avunc_bothsides, nn, parpar, childpar, pc, gppar, halfsib_sets, twins] = pullFamily(tmp_graph, p)
+            [sibpar, avunc_bothsides, nn, parpar, childpar, pc, gppar, gcpar, halfsib_sets, twins] = pullFamily(tmp_graph, p)
             for sib in siblings:
                 for sp in sibpar:
                     addEdgeType(sib,sp,'NN','AU',tmp_graph)
@@ -435,6 +433,7 @@ def pullFamily(tmp_graph,ind):
     avunc = set()
     sib = set()
     grandparents = set()
+    grandchildren = set()
     halfsibs = set()
     nn = set()
     twins = set()
@@ -461,10 +460,9 @@ def pullFamily(tmp_graph,ind):
                 twins.add(edge[1])
             elif edge_info == 'PC':
                 pc.add(edge[1])
+            elif edge_info == 'GC':
+                grandchildren.add(edge[1])
     avunc_sets = []
-    # tmp=tmp_graph.subgraph(avunc)
-    # for x in nx.strongly_connected_components(tmp):
-    #     avunc_sets.append(list(x))
     checked = set()
     for ind in avunc:
         if not ind in checked:
@@ -486,4 +484,366 @@ def pullFamily(tmp_graph,ind):
         halfsibs.remove(halfsibs[0])
         halfsib_sets.append(halfsib_set)
 
-    return [sib, avunc_sets, nn, parents, children, pc, grandparents, halfsib_sets, twins]
+    return [sib, avunc_sets, nn, parents, children, pc, grandparents, grandchildren, halfsib_sets, twins]
+
+
+def getAllCloseRelationships(tmp_graph):
+    fam = 1
+    checked = set()
+    for node in tmp_graph:
+        if not node in checked:
+            switches = []
+            missing = 1
+            # get close relatives
+            [sibs, avunc_sets, nn, parents, children, pc, grandparents, grandchildren, halfsib_sets, twins] = pullFamily(tmp_graph,node)
+
+            # 'climb' pedigree by switching to grandparents or parents if available
+            current_node = node
+            while len(grandparents+parents+avunc_sets):
+                if len(grandparents):
+                    i = 0
+                    while i < len(grandparents):
+                        if not list(grandparents)[i] in checked:
+                            switches.append(current_node)
+                            current_node = list(grandparents)[i]
+                            [sibs, avunc_sets, nn, parents, children, pc, grandparents, grandchildren, halfsib_sets, twins] = pullFamily(tmp_graph, current_node)
+                            break
+                        i += 1
+
+                elif len(parents): #switch to parent
+                    i = 0
+                    while i < len(parents):
+                        if not parents[i] in checked:
+                            switches.append(current_node)
+                            current_node = parents[i]
+                            [sibs, avunc_sets, nn, parents, children, pc, grandparents, grandchildren, halfsib_sets, twins] = pullFamily(tmp_graph, current_node)
+                            break
+                        i += 1
+                elif len(avunc_sets):
+                    i = 0
+                    while i < len(avunc_sets):
+                        ii = 0
+                        while ii < len(avunc_sets[i]):
+                            if not avunc_sets[i][ii] in checked:
+                                switches.append(current_node)
+                                current_node = avunc_sets[i][ii]
+                                [sibs, avunc_sets, nn, parents, children, pc, grandparents, grandchildren, halfsib_sets, twins] = pullFamily(tmp_graph, current_node)
+                                break
+                            ii += 1
+                        i += 1
+                else:
+                    break #we've already considered all parents/grandparents
+
+            # add all close relatives to list of checked individuals
+            checked = checked.union(sibs,nn,parents,children,pc,grandparents,halfsib_sets,twins)
+            for av in range(0,len(avunc_sets)):
+                checked = checked.union(av)
+            for hs in range(0,len(halfsib_sets)):
+                checked = checked.union(hs)
+
+            # add in missing parents
+            if len(parents) == 1:
+                parents.add(str(fam)+'_missing'+str(missing)) # e.g. '1_missing1' for missing individual 1 in fam 1
+            if not len(parents):
+                parents.add(str(fam)+'_missing'+str(missing))
+                parents.add(str(fam)+'_missing'+str((missing+1)))
+                missing += 2
+            outfile.write(str(fam)+'\t'+current_node+'\t'+parents[0]+'\t'+parents[1]+'\n') #this individual's fam info
+
+            for sib in sibs: #siblings
+                outfile.write(str(fam)+'\t'+sib+'\t'+parents[0]+'\t'+parents[1]+'\n')
+
+            # add nieces and nephews to outfile
+            checked_nn = set()
+            for n in nn: #nieces and nephews
+                if not n in checked_nn:
+                    [n_sibs,n_par] = getSibsParentsFromGraph(tmp_graph,n)
+                    n_sibs.add(n)
+                    if len(n_par) == 2: #sibling of current_node already in graph
+                        for ns in n_sibs:
+                            outfile.write(str(fam)+'\t'+ns+'\t'+n_par[0]+'\t'+n_par[1]+'\n')
+                    elif len(n_par) == 1:
+                        if n_par[0] in sibs: #sibling of current node already in graph
+                            for ns in n_sibs:
+                                outfile.write(str(fam)+'\t'+ns+'\t'+n_par[0]+'\t'+str(fam)+'_missing'+str(missing)+'\n')
+                            missing += 1
+                        else: #sibling of current node not already in graph
+                            for ns in n_sibs:
+                                outfile.write(str(fam) + '\t' + ns + '\t' + str(fam) + '_missing' + str(missing) + '\t' + str(fam) + '_missing' + str(missing+1) + '\n')
+                            missing += 2
+                    else:
+                        for ns in n_sibs:
+                            outfile.write(str(fam) + '\t' + ns + '\t' + str(fam) + '_missing' + str(missing) + '\t' + str(fam) + '_missing' + str(missing + 1) + '\n')
+                        missing += 2
+                    checked_nn = checked_nn.union(n_sibs)
+
+            # add children to outfile
+            for ch in children:
+                outfile.write()
+
+            if len(avunc_sets):
+                if len(grandparents) == 1:
+                    parent_gp
+            for av_set in avunc_sets:
+                for av in av_set:
+                    outfile.write(str(fam))
+
+
+
+def moveUpForFillIn(node,checked,tmp_graph):
+    switches = []
+    [sibs, avunc_sets, nn, parents, children, pc, grandparents, grandchildren, halfsib_sets, twins] = pullFamily(tmp_graph, node)
+    current_node = node
+    past_node = ''
+    while (len(grandparents) or len(parents) or len(avunc_sets)) and not past_node == current_node:
+        past_node = current_node
+        if len(grandparents):
+            grandparents = list(grandparents)
+            i = 0
+            while i < len(grandparents):
+                print('grandparents')
+                if not grandparents[i] in checked:
+                    switches.append(current_node)
+                    current_node = grandparents[i]
+                    [sibs, avunc_sets, nn, parents, children, pc, grandparents, grandchildren, halfsib_sets, twins] = pullFamily(tmp_graph, current_node)
+                    break
+                i += 1
+
+        elif len(parents):  # switch to parent
+            print('parents')
+            i = 0
+            parents = list(parents)
+            while i < len(parents):
+                if not parents[i] in checked:
+                    switches.append(current_node)
+                    current_node = parents[i]
+                    [sibs, avunc_sets, nn, parents, children, pc, grandparents, grandchildren, halfsib_sets, twins] = pullFamily(tmp_graph, current_node)
+                    break
+                i += 1
+        elif len(avunc_sets):
+            i = 0
+            while i < len(avunc_sets):
+                print('avunc')
+                ii = 0
+                avset = list(avunc_sets[i])
+                while ii < len(avset):
+                    if not avset[ii] in checked:
+                        switches.append(current_node)
+                        current_node = avset[ii]
+                        [sibs, avunc_sets, nn, parents, children, pc, grandparents, grandchildren, halfsib_sets, twins] = pullFamily(tmp_graph, current_node)
+                        break
+                    ii += 1
+                i += 1
+        else:
+            break  # we've already considered all parents/grandparents/aunts/uncles
+
+    return [current_node,switches, sibs, avunc_sets, nn, parents, children, pc, grandparents, grandchildren, halfsib_sets, twins]
+
+def fillInMissingParentGPFromAv(this_fam, grandparents, parents, avunc_set, av_par, missing):
+    #compare grandparents in graph with parents of avuncular in graph, determine if the two lineages are the same
+    #fillInMissingParentGPFromAv(this_fam, grandparents, avunc_sets[0], av1_par, missing)
+    if len(grandparents): #if grandparents are available, check whether they are the parents of the av set
+        common_inds = list(set(grandparents) & set(av_par))
+        if not len(common_inds):  # none of the grandparents of current_node are the parents of the aunt/uncle set
+            for avs in avunc_set:  # all aunts/uncles in this avunc set
+                #addEdgeType(avs, 'missing_' + str(missing), 'C', 'P', this_fam)
+                #addEdgeType(avs, 'missing_' + str(missing + 1), 'C', 'P', this_fam)
+                addEdgeType(avs, 'missing_' + str(missing - 2), 'FS', 'FS', this_fam)  # add edge between avunc_set and the missing parent (their sib)
+            addEdgeType(av_par[0], 'missing_' + str(missing - 2), 'P', 'C', this_fam)  # add edge between missing parent and his/her parent
+            addEdgeType(av_par[1], 'missing_' + str(missing - 2), 'P', 'C', this_fam)  # add edge between missing parent and his/her parent
+            missing += 2
+        else:  # a parent/parents of the aunt/uncle set are in the grandparent set
+            if len(common_inds) == 2:  # both parents of missing parent are in dataset
+                addEdgeType('missing_' + str(missing - 2), common_inds[0], 'C', 'P', this_fam)  # add edge between missing parent and his/her parent
+                addEdgeType('missing_' + str(missing - 2), common_inds[1], 'C', 'P', this_fam)  # add edge between missing parent and his/her parent
+                for avs in avunc_sets:
+                    addEdgeType('missing_' + str(missing - 2), avs, 'FS', 'FS', this_fam)  # add edge between missing parent and his/her parent
+            elif len(common_inds) == 1:  # only one parent of missing parent is in dataset
+                addEdgeType('missing_' + str(missing - 2), common_inds[0], 'C', 'P', this_fam)
+                addEdgeType('missing_' + str(missing - 2), 'missing_' + str(missing), 'C', 'P', this_fam)  # create node for missing grandparent
+                for avs in avunc_set:
+                    addEdgeType(avs, 'missing_' + str(missing), 'C', 'P', this_fam)
+                missing += 1
+    #else, avset could be either lineage
+    else:
+        for avs in avunc_set:  # all aunts/uncles in this avunc set
+            # addEdgeType(avs, 'missing_' + str(missing), 'C', 'P', this_fam)
+            # addEdgeType(avs, 'missing_' + str(missing + 1), 'C', 'P', this_fam)
+            addEdgeType(avs, list(parents)[0], 'FS', 'FS', this_fam)  # add edge between avunc_set and the missing parent (their sib)
+        addEdgeType(list(av_par)[0], list(parents)[0], 'P', 'C', this_fam)  # add edge between missing parent and his/her parent
+        addEdgeType(list(av_par)[1], list(parents)[0], 'P', 'C', this_fam)  # add edge between missing parent and his/her parent
+
+
+
+def fillInGraph(tmp_graph):
+    # add missing individuals as nodes to graph
+    checked = set()
+    fam = 1
+    for node in tmp_graph.nodes():
+        if not node in checked:
+            this_fam = nx.ego_graph(tmp_graph, node)
+            #keep a list of all tree possibilities
+            all_trees_this_fam = []
+
+            #iterate through network of close relatives, filling in missing individuals
+            missing = 1  # keep track of what missing individual # we're on
+            for fam_node in this_fam.nodes():
+                if not fam_node in checked and not 'missing' in fam_node:
+                    switches = [] #keep track of what switches we make as we 'climb' the pedigree
+
+                    # 'climb' pedigree by switching to grandparents or parents if available; get relatives of 'current_node'
+                    [current_node, switches, sibs, avunc_sets, nn, parents, children, pc, grandparents, grandchildren, halfsib_sets, twins] = moveUpForFillIn(fam_node,checked,this_fam)
+                    sibs.add(current_node)
+                    switches.append(current_node)
+
+                    while len(switches):
+                        current_node = switches.pop()
+                        [sibs, avunc_sets, nn, parents, children, pc, grandparents, grandchildren, halfsib_sets, twins] = pullFamily(tmp_graph, current_node)
+                        sibs.add(current_node)
+                        checked = checked.union(sibs)
+
+                        ## add missing parents ##
+                        #if len(parents) == 2, then the aunts/uncles and grandparents should be taken care of already
+                        if len(parents) == 1:
+                            for hset in halfsib_sets:
+                                hs = hset[0]
+                                [hs_sibs, hs_par] = getSibsParentsFromGraph(this_fam, hs)
+                                if any([x in parents for x in hs_par]): #if the parent is shared between sibset and halfsib set
+                                    for h in hs:
+                                        addEdgeType(h, 'missing_' + str(missing), 'C', 'P', this_fam)
+                                        missing += 1
+                            for s in sibs.union(twins):
+                                addEdgeType(s, 'missing_'+str(missing), 'C', 'P', this_fam)
+                            missing += 1
+
+                            # connect missing parent to relevant aunts/uncles, if any
+                            if len(avunc_sets):
+                                if len(avunc_sets) == 1:
+                                    if not list(parents)[0] in avunc_sets[0]: #the available parent isn't in the avunc_set --> the missing parent must be avunc_set's sib
+                                        for avs in avunc_sets[0]:
+                                            addEdgeType(avs, 'missing_' + str(missing-1), 'FS', 'FS', this_fam)
+                                else:
+                                    if not list(parents)[0] in avunc_sets[0]: #the available parent must be sib of second avunc set
+                                        for avs in avunc_sets[0]:
+                                            addEdgeType(avs, 'missing_' + str(missing-1), 'C', 'P', this_fam)
+                                    else: #the available parent must be sib offirst avunc set
+                                        for avs in avunc_sets[1]:
+                                            addEdgeType(avs, 'missing_' + str(missing-1), 'C', 'P', this_fam)
+
+
+
+                        elif len(parents) == 0:
+                            for s in sibs.union(twins):
+                                addEdgeType(s, 'missing_' + str(missing), 'C', 'P', this_fam)
+                                addEdgeType(s, 'missing_' + str(missing+1), 'C', 'P', this_fam)
+                            parents.add('missing_'+str(missing))
+                            parents.add('missing_'+str(missing+1))
+                            missing += 2
+
+                            # if there are any avunc_sets, ensure they're connected to their respective siblings (missing parents)
+                            # also add in any missing grandparents of current_node
+                            if len(avunc_sets) == 2: #we have avunculars through both sides of family
+                                [av1_sibs, av1_par] = getSibsParentsFromGraph(this_fam, list(avunc_sets[0])[0])
+                                [av2_sibs, av2_par] = getSibsParentsFromGraph(this_fam, list(avunc_sets[1])[0])
+                                fillInMissingParentGPFromAv(this_fam, grandparents, parents, avunc_sets[0], av1_par, missing)
+                                fillInMissingParentGPFromAv(this_fam, grandparents, parents, avunc_sets[1], av2_par, missing)
+                                missing += 2
+                                if len(halfsib_sets):
+                                    for hsset in halfsib_sets:
+                                        hs = list(hsset)
+                                        [hs_sibs, hs_avunc_sets, hs_nn, hs_parents, hs_children, hs_pc, hs_grandparents, hs_grandchildren, hs_halfsib_sets, hs_twins] = pullFamily(this_fam, hs[0])
+                                        if len(hs_avunc_sets):
+                                            if list(hs_avunc_sets[0])[0] in avunc_sets[0]: #if the halfsib avunc set is the same as the sib avunc set, the missing parent is also parent of hs set
+                                                for halfsib in hs:
+                                                    addEdgeType(halfsib, 'missing_' + str(missing-2), 'C', 'P', this_fam)
+                                            elif len(hs_avunc_sets) == 2 and list(hs_avunc_sets[0])[0] in avunc_sets[1]:
+                                                for halfsib in hs:
+                                                    addEdgeType(halfsib, 'missing_' + str(missing-1), 'C', 'P', this_fam)
+                            elif len(avunc_sets) == 1:
+                                [av1_sibs, av1_par] = getSibsParentsFromGraph(this_fam, list(avunc_sets[0])[0])
+                                fillInMissingParentGPFromAv(this_fam, grandparents, parents, avunc_sets[0], av1_par, missing) #add the grandparents of the sibling sets if missing
+                                missing += 1
+                                if len(halfsib_sets):
+                                    for hsset in halfsib_sets:
+                                        hs = list(hsset)
+                                        [hs_sibs, hs_avunc_sets, hs_nn, hs_parents, hs_children, hs_pc, hs_grandparents, hs_grandchildren, hs_halfsib_sets, hs_twins] = pullFamily(this_fam, hs[0])
+                                        if len(hs_avunc_sets):
+                                            if any(x in avunc_sets[0] for x in hs_avunc_sets[0]):  # if the halfsib avunc set is the same as the sib avunc set, the missing parent is also parent of hs set
+                                                for halfsib in hs+list(sibs):
+                                                    addEdgeType(halfsib, 'missing_' + str(missing - 2), 'C', 'P', this_fam)
+                                            elif len(hs_avunc_sets) == 2 and any(x in avunc_sets[0] for x in hs_avunc_sets[1]):
+                                                for halfsib in hs:
+                                                    addEdgeType(halfsib, 'missing_' + str(missing - 1), 'C', 'P', this_fam)
+
+                            else: #no aunts/uncles; for halfsibs, just share a single parent with full sibs
+                                if len(halfsib_sets):
+                                    for hsset in halfsib_sets:
+                                        hs = list(hsset)
+                                        for halfsib in hsset:
+                                            addEdgeType(halfsib, 'missing_'+str(missing-2),'C','P',this_fam)
+
+
+
+            printFam(this_fam,fam,'fam_'+str(fam)+'.fam')
+            fam = fam + 1
+
+
+
+
+
+def printFam(this_fam,fam,outfile):
+    checkedfam = set()
+    output = open(outfile,'w')
+    for node in this_fam.nodes():
+        if not 'missing' in node and not node in checkedfam:
+            [sibs, parents] = getSibsParentsFromGraph(this_fam,node)
+            output.write(fam+'\t'+node+'\t'+list(parents)[0]+'\t'+list(parents)[1]+'\n')
+            for sib in sibs:
+                output.write(fam+'\t'+sib + '\t' + list(parents)[0] + '\t' + list(parents)[1] + '\n')
+            checkedfam = checkedfam.union(sibs)
+            checkedfam.add(node)
+
+    output.close()
+
+
+
+            #
+            #
+            #
+            # #add missing siblings according to nieces/nephews
+            # checked_nn = set()
+            # for n in nn: #nieces and nephews
+            #     if not n in checked_nn:
+            #         [n_sibs,n_par] = getSibsParentsFromGraph(this_fam,n)
+            #         n_sibs.add(n)
+            #         if len(n_par) == 1:
+            #             if not n_par[0] in sibs: #sibling of current node already in graph
+            #                 for ns in n_sibs: #add parent-child relationships between these nn and their missing parent
+            #                     addEdgeType(ns, 'missing_' + str(missing), 'C', 'P', this_fam)
+            #                 for s in sibs: #add sibling relationship between the missing parent and their sibs
+            #                     addEdgeType(s, 'missing_' + str(missing), 'FS', 'FS', this_fam)
+            #                 missing += 1
+            #         elif len(n_par) == 0:
+            #             for ns in n_sibs:  # add parent-child relationships between these nn and their missing parent
+            #                 addEdgeType(ns, 'missing_' + str(missing), 'C', 'P', this_fam)
+            #                 addEdgeType(ns, 'missing_' + str(missing+1), 'C', 'P', this_fam)
+            #             for s in sibs: #add sibling relationship between one of the missing parents and their sibs
+            #                 addEdgeType(s, 'missing_' + str(missing), 'FS', 'FS', this_fam)
+            #             missing += 2
+            #         checked_nn = checked_nn.union(n_sibs)
+            #
+            # all_trees_this_fam.append(this_fam) #add this_fam now; relationships added beyond this point can have multiple possibilities
+            # #add missing children according to grandchildren
+            # checked_gc = set()
+            # this_fam_tmp = this_fam.copy()
+            # for gc in grandchildren:
+            #     if not gc in checked_gc:
+            #         [gc_sibs, gc_par] = getSibsParentsFromGraph(this_fam_tmp,gc)
+            #         gc_sibs.add(gc)
+            #         if len(gc_par): #if the grandchild has parents in the dataset
+            #             if not any([x in children for x in gc_par]): #the grandchild's parent that is the grandparent's child isn't in the dataset
+            #                 for gcs in gc_sibs:
+            #                     addEdgeType(gcs, 'missing_' + str(missing), 'C', 'P', this_fam_tmp) #
+            #        # else:
+            #             #current_node and any other grandparents of the grandchildren in the dataset could be pairs
+            #
