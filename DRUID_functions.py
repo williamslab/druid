@@ -511,19 +511,30 @@ def collectIBDsegmentsSibsAvuncularCombine(sibset, avunc, file_for_segments):
     for ind1 in sibset:
         IBD_all[ind1] = {}
         IBD_all[ind1]['A'] = []
+        tmp_ind1 = {}
+        tmp_ind1[0] = {}
+        tmp_ind1[1] = {}
         for ind2 in avunc:
             tmp = getIBDsegments(ind1, ind2, file_for_segments) #[IBD1, IBD2]
+            # for chr in tmp[0].keys():
+            #     tmp[0][chr].sort()
+            # for chr in tmp[1].keys():
+            #     tmp[1][chr].sort()
             for chr in tmp[0].keys():
-                tmp[0][chr].sort()
+                if not chr in tmp_ind1[0].keys():
+                    tmp_ind1[0][chr] = []
+                tmp_ind1[0][chr] = tmp_ind1[0][chr] + tmp[0][chr]
             for chr in tmp[1].keys():
-                tmp[1][chr].sort()
+                if not chr in tmp_ind1[1].keys():
+                    tmp_ind1[1][chr] = []
+                tmp_ind1[1][chr] = tmp_ind1[1][chr] + tmp[1][chr]
 
-        for chr in tmp[0].keys():
-            tmp[0][chr] = mergeIntervals(tmp[0][chr][:])
-        for chr in tmp[1].keys():
-            tmp[1][chr] = mergeIntervals(tmp[1][chr][:])
+        for chr in tmp_ind1[0].keys():
+            tmp_ind1[0][chr] = mergeIntervals(tmp_ind1[0][chr][:])
+        for chr in tmp_ind1[1].keys():
+            tmp_ind1[1][chr] = mergeIntervals(tmp_ind1[1][chr][:])
 
-        IBD_all[ind1]['A'] = [{},tmp[0],tmp[1]] #return IBD1, IBD2
+        IBD_all[ind1]['A'] = [{},tmp_ind1[0],tmp_ind1[1]] #return IBD1, IBD2
 
     return IBD_all
 
@@ -571,9 +582,7 @@ def findOverlap(sibseg, avsib, ss1, sa1, sa2, ranges, Eval):
                     kav1 = 0
                     kav2 = 0
                     krange_cont = 0
-                    while chr in sibseg[sib1][sib2][ss1].keys() and chr in avsib[sib1][av][sa1].keys() and chr in \
-                            avsib[sib2][av][sa2].keys() and ksib < len(sibseg[sib1][sib2][ss1][chr]) and kav1 < len(
-                            avsib[sib1][av][sa1][chr]) and kav2 < len(avsib[sib2][av][sa2][chr]):
+                    while chr in sibseg[sib1][sib2][ss1].keys() and chr in avsib[sib1][av][sa1].keys() and chr in avsib[sib2][av][sa2].keys() and ksib < len(sibseg[sib1][sib2][ss1][chr]) and kav1 < len(avsib[sib1][av][sa1][chr]) and kav2 < len(avsib[sib2][av][sa2][chr]):
 
                         if checkOverlap(sibseg[sib1][sib2][ss1][chr][ksib],
                                         avsib[sib1][av][sa1][chr][kav1]) and checkOverlap(
@@ -913,7 +922,7 @@ def combineBothGPsKeepProportionOnlyExpectation(sib1, avunc1, pc1, sib2, avunc2,
                 IBD2_add = IBD2_add / proportion_gp_rel_exp
 
             if IBD2_add != 0:
-                estimated_exp = getInferredFromK(K_exp + (IBD2_add) / total_genome / 4.0)  # add in IBD2, remove IBD1
+                estimated_exp = getInferredFromK(K_exp + (IBD2_add) / total_genome / 2.0)  # add in IBD2, remove IBD1
 
         result = []
         if estimated_exp != 0:
@@ -1573,6 +1582,7 @@ def runDRUID(rel_graph, all_rel, inds, args):
                             results_tmp = combineBothGPsKeepProportionOnlyExpectation(sib1, relavunc1, pc1, sib2, relavunc2, pc2, args.s[0], args.i[0], rel_graph)
                         for resu in results_tmp:
                             if not [resu[0],resu[1]] in checked:
+                                resu.append('inferred')
                                 results.append(resu)
                                 addToChecked(resu[0],resu[1],checked)
                         if ind1_original != ind1 or ind2_original != ind2:
