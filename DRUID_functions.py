@@ -1235,7 +1235,7 @@ def getSecondDegreeRelatives(rel_graph,all_rel,second,third,sibset,par):
     siblist = list(sibset)
     check_inds = set()
     for [ind1, ind2] in second+third:
-        if not rel_graph.has_edge(ind1,ind2):
+        if not rel_graph.has_edge(ind1,ind2) or rel_graph.get_edge_data(ind1,ind2)['type'] in ['2','3']:
             if ind1 in sibset and not ind2 in par:
                 check_inds.add(ind2)
             elif ind2 in sibset and not ind1 in par:
