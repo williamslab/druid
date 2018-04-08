@@ -103,7 +103,7 @@ def inferFirst(rel_graph, rel_graph_tmp, all_rel, first, second, C):
                             else:
                                 addEdgeType(ind, list(siblings)[0], 'PC', 'PC', rel_graph)
                         else:
-                            for sib in sibslings: #add ind as parent for each sibling
+                            for sib in siblings: #add ind as parent for each sibling
                                 addEdgeType(ind, sib, 'P', 'C', rel_graph)
 
     for sibset in sibsets:
