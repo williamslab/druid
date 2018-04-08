@@ -155,7 +155,7 @@ def inferSecondPath(rel_graph, rel_graph_tmp, all_rel, second, file_for_segments
         if not rel_graph.has_edge(i1, i2):
             if all_rel[i1][i2][1] < dc_lower: #proportion IBD2 less than requirement for DC classification
                 addEdgeType(i1, i2, '2', '2', rel_graph)
-            elif all_rel[i1][i2][1] < dc_upper: #proportion IBD2 within requirement for DC classification
+            else: #proportion IBD2 within requirement for DC classification
                 sib1 = getSibsFromGraph(rel_graph,i1)
                 sib2 = getSibsFromGraph(rel_graph,i2)
                 sib1.add(i1)
