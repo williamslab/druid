@@ -1580,11 +1580,11 @@ def runDRUID(rel_graph, all_rel, inds, args):
 
                         if relavunc1 != 'av' and relavunc2 != 'av':
                             results_tmp = combineBothGPsKeepProportionOnlyExpectation(sib1, relavunc1, pc1, sib2, relavunc2, pc2, args.s[0], args.i[0], rel_graph)
-                        for resu in results_tmp:
-                            if not [resu[0],resu[1]] in checked:
-                                resu.append('inferred')
-                                results.append(resu)
-                                addToChecked(resu[0],resu[1],checked)
+                            for resu in results_tmp:
+                                if not [resu[0],resu[1]] in checked:
+                                    resu.append('inferred')
+                                    results.append(resu)
+                                    addToChecked(resu[0],resu[1],checked)
                         if ind1_original != ind1 or ind2_original != ind2:
                             for res in results_tmp:
                                 if (res[0] == ind1 and res[1] == ind2) or (res[0] == ind2 and res[1] == ind1):
