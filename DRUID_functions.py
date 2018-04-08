@@ -26,24 +26,23 @@ def inferFirst(rel_graph, rel_graph_tmp, all_rel, first, second, C):
     #build graphs using first degree relative inferences
     for [i1,i2] in first+second: #iterate through currently inferred first and second degree pairs
         # all_rel: IBD1, IBD2, K, D
-        if all_rel[i1][i2][1] > 1/2.0**(5/2.0): #if IBD2 meets minimum threshold
-            if all_rel[i1][i2][2] < 1/2.0**(3/2.0):
+        if C:
+            fs_IBD2 = 1/2.0**(5/2.0)
+            fs_kin = 1/2.0**(5/2.0)
+        else:
+            fs_IBD2 = 1/2.0**(11/4.0)
+            fs_kin = 1/2.0**(7/2.0)
+        if all_rel[i1][i2][1] >= fs_IBD2 and all_rel[i1][i2][2] >= fs_kin: #if IBD2 meets minimum threshold
+            if all_rel[i1][i2][2] < 1/2.0**(3/2.0): #not twin
+                if all_rel[i1][i2][1] < 1/2.0**(5/2.0): #lower IBD2 than expected
+                    print("Warning: " + i1 + ' and ' + i2 + ' have low levels of IBD2 for siblings, may be 3/4 sibs')
                 addEdgeType(i1, i2, 'FS', 'FS', rel_graph)
-            else: #twin
+            elif all_rel[i1][i2][2] >= 1/2.0**(3/2.0): #twin
                 addEdgeType(i1, i2, 'T', 'T', rel_graph)
-
-        elif all_rel[i1][i2][1] > 1/2.0**(7/2.0):
-            if not C and all_rel[i1][i2][1] > 1/2.0**(11/4.0): #DRUID, IBD2 > 1/2**(11/4)
-                print("Warning: "+i1+' and '+i2+' have low levels of IBD2 for siblings, may be 3/4 sibs')
-                addEdgeType(i1, i2, 'FS', 'FS', rel_graph)
-            elif C and all_rel[i1][i2][1] > 1/2.0**(5/2.0): #DRUID_C, IBD2 > 1/2**(5/2)
-                addEdgeType(i1, i2, 'FS', 'FS', rel_graph)
-            else:
-                addEdgeType(i1, i2, '1U', '1U', rel_graph)
         else:
             if all_rel[i1][i2][3] == 1:
-                #possible parent-child pair
                 addEdgeType(i1, i2, '1U', '1U', rel_graph)
+
 
     # ensure subgraphs of siblings are connected
     checked = set()
@@ -146,15 +145,12 @@ def inferFirst(rel_graph, rel_graph_tmp, all_rel, first, second, C):
     #                 addEdgeType
 
 
-def inferSecondPath(rel_graph, rel_graph_tmp, all_rel, second, third, file_for_segments, outfile, C):
+def inferSecondPath(rel_graph, rel_graph_tmp, all_rel, second, file_for_segments, outfile, C):
     # infer and add 2nd degree relationships
-
     if C:
         dc_lower = 1/2.0**(9/2.0) #minimum IBD2 for DC classification
-        dc_upper = 1
     else:
         dc_lower = 1/2.0**(9/2.0)
-        dc_upper = 1
     for [i1, i2] in second:
         if not rel_graph.has_edge(i1, i2):
             if all_rel[i1][i2][1] < dc_lower: #proportion IBD2 less than requirement for DC classification
@@ -169,19 +165,6 @@ def inferSecondPath(rel_graph, rel_graph_tmp, all_rel, second, third, file_for_s
                     for s2 in sib2:
                         addEdgeType(s1, s2, 'DC', 'DC', rel_graph)
 
-
-    for [i1, i2] in third:
-        if not rel_graph.has_edge(i1, i2):
-            if all_rel[i1][i2][1] >= dc_lower and all_rel[i1][i2][1] <= dc_upper: #proportion IBD2 within requirement for DC classification
-                sib1 = getSibsFromGraph(rel_graph,i1)
-                sib2 = getSibsFromGraph(rel_graph,i2)
-                sib1.add(i1)
-                sib2.add(i2)
-                # if one i1 is a DC of i2, then siblings of i1 are DC of siblings of i2 (and i2)
-                for s1 in sib1:
-                    for s2 in sib2:
-                        addEdgeType(s1,s2,'DC','DC',rel_graph)
-
     checked = set()
     for node in rel_graph.nodes():
         if not node in checked:
@@ -190,7 +173,7 @@ def inferSecondPath(rel_graph, rel_graph_tmp, all_rel, second, third, file_for_s
 
             if len(sibs) > 1:
                 #print('TESTING '+" ".join(sibs)+'\n')
-                second_av = getSecondDegreeRelatives(rel_graph,all_rel,second,third,sibs,par)
+                second_av = getSecondDegreeRelatives(rel_graph,all_rel,second,sibs,par)
                 [avunc, avunc_hs_all] = getAuntsUncles_IBD011_nonoverlapping_pairs(all_rel, sibs, halfsibs, second_av, file_for_segments, rel_graph)
 
                 # add the inferred avuncular relationships to graph
@@ -1228,13 +1211,13 @@ def getAllRel(results_file, inds_file):
     return [all_rel,inds,first,second,third]
 
 
-def getSecondDegreeRelatives(rel_graph,all_rel,second,third,sibset,par):
+def getSecondDegreeRelatives(rel_graph,all_rel,second,sibset,par):
     # collect all individuals we should check for being aunts/uncles of the sibset
     par = list(par)
     check_for_au = set()
     siblist = list(sibset)
     check_inds = set()
-    for [ind1, ind2] in second+third:
+    for [ind1, ind2] in second:
         if not rel_graph.has_edge(ind1,ind2) or rel_graph.get_edge_data(ind1,ind2)['type'] in ['2','3']:
             if ind1 in sibset and not ind2 in par:
                 check_inds.add(ind2)
@@ -1580,11 +1563,14 @@ def runDRUID(rel_graph, all_rel, inds, args):
 
                         if relavunc1 != 'av' and relavunc2 != 'av':
                             results_tmp = combineBothGPsKeepProportionOnlyExpectation(sib1, relavunc1, pc1, sib2, relavunc2, pc2, args.s[0], args.i[0], rel_graph)
-                            for resu in results_tmp:
-                                if not [resu[0],resu[1]] in checked:
-                                    resu.append('inferred')
-                                    results.append(resu)
-                                    addToChecked(resu[0],resu[1],checked)
+                        else:
+                            # sibset1's aunt/uncle is in sibset2 (sibset2 = aunts/uncles of sibset1)
+                            results_tmp = []
+                        for resu in results_tmp:
+                            if not [resu[0],resu[1]] in checked:
+                                resu.append('inferred')
+                                results.append(resu)
+                                addToChecked(resu[0],resu[1],checked)
                         if ind1_original != ind1 or ind2_original != ind2:
                             for res in results_tmp:
                                 if (res[0] == ind1 and res[1] == ind2) or (res[0] == ind2 and res[1] == ind1):
