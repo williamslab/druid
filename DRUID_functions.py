@@ -1289,6 +1289,7 @@ def getAuntsUncles_IBD011_nonoverlapping_pairs(all_rel, sibset, halfsibs, second
             #check with halfsibs
             second = second_original
             if len(halfsibs):
+                avunc_hs = []
                 for hs in range(0,len(halfsibs)): #hs = index of halfsib set
                     for [sib1,sib2] in itertools.product(sibset,halfsibs[hs]): #all pairs of [sib, halfsib]
                         sibseg = collectIBDsegments([sib1,sib2], file_for_segments)
