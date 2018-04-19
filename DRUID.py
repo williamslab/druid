@@ -14,7 +14,7 @@ import os.path
 
 
 parser=argparse.ArgumentParser(
-    description='''DRUID v0.9.5c -- A multiway relatedness estimator. 4/7/2018.''',
+    description='''DRUID v0.9.5d -- A multiway relatedness estimator. 4/7/2018.''',
     epilog="""Outputs file with extension *.DRUID and contains columns [ind1, ind2, DRUID's inferred degree of relatedness, input pairwise IBD1/2 proportions file's inferred degree of relatedness.
      With flag -F, can also output PLINK format .fam files containing first and second degree relationships types which were inferred/provided, outputting multiple .fam files in cases when a parent-child pair is found, but there is not
      enough information to determine who is the parent and who is the child""")

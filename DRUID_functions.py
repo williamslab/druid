@@ -917,10 +917,10 @@ def combineBothGPsKeepProportionOnlyExpectation(sib1, avunc1, pc1, sib2, avunc2,
         #get all combinations of pairs for results
         for sib_rel in sib2:
             for sib in sib1:
-                if rel_graph.has_edge(sib_rel,sib):
-                    estimated_out_exp = rel_graph.get_edge_data(sib_rel,sib)['type']
-                else:
-                    estimated_out_exp = estimated_exp
+                # if rel_graph.has_edge(sib_rel,sib):
+                #     estimated_out_exp = rel_graph.get_edge_data(sib_rel,sib)['type']
+                # else:
+                estimated_out_exp = estimated_exp
                 if sib_rel < sib:
                     refined = all_rel[sib_rel][sib][3]
                 else:
@@ -929,13 +929,13 @@ def combineBothGPsKeepProportionOnlyExpectation(sib1, avunc1, pc1, sib2, avunc2,
                 result.append(to_add)
 
             for avunc in avunc1:
-                if rel_graph.has_edge(sib_rel, avunc):
-                    estimated_out_exp = rel_graph.get_edge_data(sib_rel,avunc)['type']
+                # if rel_graph.has_edge(sib_rel, avunc):
+                #     estimated_out_exp = rel_graph.get_edge_data(sib_rel,avunc)['type']
+                # else:
+                if estimated_exp != 0:
+                    estimated_out_exp = estimated_exp - 1
                 else:
-                    if estimated_exp != 0:
-                        estimated_out_exp = estimated_exp - 1
-                    else:
-                        estimated_out_exp = 0
+                    estimated_out_exp = 0
                 if sib_rel < avunc:
                     refined = all_rel[sib_rel][avunc][3]
                 else:
@@ -960,13 +960,13 @@ def combineBothGPsKeepProportionOnlyExpectation(sib1, avunc1, pc1, sib2, avunc2,
 
         for avunc_rel in avunc2:
             for sib in sib1:
-                if rel_graph.has_edge(avunc_rel, sib):
-                    estimated_out_exp = rel_graph.get_edge_data(avunc_rel,sib)['type']
+                # if rel_graph.has_edge(avunc_rel, sib):
+                #     estimated_out_exp = rel_graph.get_edge_data(avunc_rel,sib)['type']
+                # else:
+                if estimated_exp != 0:
+                    estimated_out_exp = estimated_exp - 1
                 else:
-                    if estimated_exp != 0:
-                        estimated_out_exp = estimated_exp - 1
-                    else:
-                        estimated_out_exp = 0
+                    estimated_out_exp = 0
                 if sib < avunc_rel:
                     refined = all_rel[sib][avunc_rel][3]
                 else:
@@ -975,13 +975,13 @@ def combineBothGPsKeepProportionOnlyExpectation(sib1, avunc1, pc1, sib2, avunc2,
                 result.append(to_add)
 
             for avunc in avunc1:
-                if rel_graph.has_edge(avunc_rel, avunc):
-                    estimated_out_exp = rel_graph.get_edge_data(avunc_rel,avunc)['type']
+                # if rel_graph.has_edge(avunc_rel, avunc):
+                #     estimated_out_exp = rel_graph.get_edge_data(avunc_rel,avunc)['type']
+                # else:
+                if estimated_exp != 0:
+                    estimated_out_exp = estimated_exp - 2
                 else:
-                    if estimated_exp != 0:
-                        estimated_out_exp = estimated_exp - 2
-                    else:
-                        estimated_out_exp = 0
+                    estimated_out_exp = 0
                 if avunc < avunc_rel:
                     refined = all_rel[avunc][avunc_rel][3]
                 else:
@@ -1382,6 +1382,18 @@ def pairInAllRel(ind1,ind2,all_rel):
     else:
         return 0
 
+def checkSibs(sibs,rel):
+    #check if all siblings have same relatedness to rel
+    all_pw = set()
+    for sib in sibs:
+        if sib < rel:
+            all_pw.add(all_rel[sib][rel][3])
+        else:
+            all_pw.add(all_rel[rel][sib][3])
+    if len(all_pw) == 1:
+        return 1
+    else:
+        return 0
 
 def checkAndRemove(x,setOrList):
     if x in setOrList:
@@ -1396,7 +1408,11 @@ def runDRUID(rel_graph, all_rel, inds, args):
             print("Comparing "+ind1+" and "+ind2)
             results = []
             #if the pair is already connected via graph, output that relationship
-            if rel_graph.has_edge(ind1, ind2):
+            [sib1, avunc1_bothsides, nn1, par1, child1, pc1, gp1, gc1, halfsib1_sets, twins1] = pullFamily(rel_graph, ind1)
+            [sib2, avunc2_bothsides, nn2, par2, child2, pc2, gp2, gc2, halfsib2_sets, twins2] = pullFamily(rel_graph, ind2)
+            sib1.add(ind1)
+            sib2.add(ind2)
+            if rel_graph.has_edge(ind1, ind2) and (rel_graph.get_edge_data(ind1,ind2)['type'] in ['FS','PC'] or ((len(sib1) > 1 and checkSibs(sib1,ind2)) or len(sib1) == 1) and ((len(sib2) > 1 and checkSibs(sib2,ind1)) or len(sib2) == 1)):
                 checked.append([ind1,ind2])
                 if ind1 < ind2:
                     refined = all_rel[ind1][ind2][3]
@@ -1407,10 +1423,6 @@ def runDRUID(rel_graph, all_rel, inds, args):
                     type = '1'
                 results = results + [[ind1, ind2, type, refined, 'graph']]
             else:
-                [sib1, avunc1_bothsides, nn1, par1, child1, pc1, gp1, gc1, halfsib1_sets, twins1] = pullFamily(rel_graph, ind1)
-                [sib2, avunc2_bothsides, nn2, par2, child2, pc2, gp2, gc2, halfsib2_sets, twins2] = pullFamily(rel_graph, ind2)
-                sib1.add(ind1)
-                sib2.add(ind2)
                 hs1 = checkUseHalfsibs(sib1, halfsib1_sets, ind2, all_rel)
                 hs2 = checkUseHalfsibs(sib2, halfsib2_sets, ind1, all_rel)
                 sib1 = sib1.union(set(hs1))
