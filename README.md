@@ -1,8 +1,8 @@
 # DRUID
 DRUID: deep relatedness inference utilizing identity by descent
 
-Updated 2/12/2018.  
-Version 0.9.2a.
+Updated 4/07/2018.  
+Version 0.9.5d.
 
 This method is currently in beta. If you find any bugs, please report to:  
 monica.ramstetter@gmail.com
