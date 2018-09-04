@@ -1560,7 +1560,10 @@ def runDRUID(rel_graph, all_rel, inds, args):
                                             [sib1u, avunc1u_bothsides, nn1u, par1u, child1u, pc1u, gp1u, gc1u, halfsib1u_sets, twins1u] = pullFamily(rel_graph, i1)
                                             sib1u.add(i1)
                                             unused_check = unused_check.union(sib1u)
-                                            results = results + combineBothGPsKeepProportionOnlyExpectation(sib1u, [], pc1, sib2, [], pc2, args.s[0], args.i[0], rel_graph)
+                                            results_to_add = combineBothGPsKeepProportionOnlyExpectation(sib1u, [], pc1, sib2, [], pc2, args.s[0], args.i[0], rel_graph)
+                                            for item in results_to_add:
+                                              addToChecked(item[0],item[1],checked)
+                                            results = results + results_to_add
                                 if len(unused2):
                                     unused_check = set()
                                     for i2 in unused2:
@@ -1568,7 +1571,10 @@ def runDRUID(rel_graph, all_rel, inds, args):
                                             [sib2u, avunc2u_bothsides, nn2u, par2u, child2u, pc2u, gp2u, gc2u, halfsib2u_sets, twins2u] = pullFamily(rel_graph, i2)
                                             sib2u.add(ind2)
                                             unused_check = unused_check.union(sib2u)
-                                            results = results + combineBothGPsKeepProportionOnlyExpectation(sib1, [], pc1, sib2u, [], pc2, args.s[0], args.i[0], rel_graph)
+                                            results_to_add = combineBothGPsKeepProportionOnlyExpectation(sib1, [], pc1, sib2u, [], pc2, args.s[0], args.i[0], rel_graph)
+                                            for item in results_to_add:
+                                              addToChecked(item[0],item[1],checked)
+                                            results = results + results_to_add
 
                         else:
                             relavunc1 = []
