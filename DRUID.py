@@ -1,3 +1,5 @@
+#!/usr/bin/env python
+
 import subprocess
 import sys
 import Bio
@@ -14,7 +16,7 @@ import os.path
 
 
 parser=argparse.ArgumentParser(
-    description='''DRUID v0.9.5d -- A multiway relatedness estimator. 4/7/2018.''',
+    description='''DRUID v0.9.6 -- A multiway relatedness estimator. Last update 12 Sep 2018.''',
     epilog="""Outputs file with extension *.DRUID and contains columns [ind1, ind2, DRUID's inferred degree of relatedness, input pairwise IBD1/2 proportions file's inferred degree of relatedness.
      With flag -F, can also output PLINK format .fam files containing first and second degree relationships types which were inferred/provided, outputting multiple .fam files in cases when a parent-child pair is found, but there is not
      enough information to determine who is the parent and who is the child""")
@@ -67,7 +69,6 @@ inferFirst(rel_graph, rel_graph_tmp, all_rel, first, second, int(args.C[0]))
 print("\nInferring second degree relatives")
 inferSecondPath(rel_graph, rel_graph_tmp, all_rel, second, args.s[0], args.o[0], int(args.C[0]))
 print('\n')
-
 
 all_results = runDRUID(rel_graph, all_rel, inds, args)
 
