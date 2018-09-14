@@ -37,7 +37,7 @@ def inferFirst(rel_graph, rel_graph_tmp, all_rel, first, second, C):
                 if all_rel[i1][i2][1] < 1/2.0**(5/2.0): #lower IBD2 than expected
                     print("Warning: " + i1 + ' and ' + i2 + ' have low levels of IBD2 for siblings, may be 3/4 sibs')
                 addEdgeType(i1, i2, 'FS', 'FS', rel_graph)
-            elif all_rel[i1][i2][2] >= 1/2.0**(3/2.0): #twin
+            else: #twin
                 addEdgeType(i1, i2, 'T', 'T', rel_graph)
         else:
             if all_rel[i1][i2][3] == 1:
@@ -1602,6 +1602,7 @@ def runDRUID(rel_graph, all_rel, inds, args):
                             total = int(closest_result[2])
                     if (ind1_new == 'same' or ind2_new == 'same'):
                         if ind1 == ind2: #catch bugs
+                            # TODO: nothing gets printed in this case
                             closest_result = [ind1,ind2,0]
                         else: #siblings
                             closest_result = [ind1,ind2,1]
@@ -1609,10 +1610,12 @@ def runDRUID(rel_graph, all_rel, inds, args):
                     elif ind1_original != ind1 or ind2_original != ind2: #if we've travelled through the graph
                         for ii in range(len(moves1)-1,-1,-1):
                             #go through each move in moves1, add move length to total
-                            if moves1[ii] in ['P','C','PC']:
-                                total = total + 1
-                            else: #gp or gc
-                                total = total + 2
+                            #only add if total != 0 (i.e., there is a relationship)
+                            if total > 0:
+                                if moves1[ii] in ['P','C','PC']:
+                                    total = total + 1
+                                else: #gp or gc
+                                    total = total + 2
                             if moves_inds1[ii] < ind2:
                                 refined = all_rel[moves_inds1[ii]][ind2][3]
                             else:
@@ -1647,17 +1650,21 @@ def runDRUID(rel_graph, all_rel, inds, args):
                                     else:
                                         refined = all_rel[ind2][p][3]
                                     if not [p,ind2] in checked:
-                                        results.append([p,ind2,total+1,refined,'graph+inferred'])
+                                        if total > 0:
+                                            results.append([p,ind2,total+1,refined,'graph+inferred'])
+                                        else:
+                                            results.append([p,ind2,total,refined,'graph+inferred'])
                                         addToChecked(p,ind2,checked)
 
                         total = int(closest_result[2])
                         [sib1, avunc1_bothsides, nn1, par1, child1, pc1, gp1, gc1, halfsib1_sets, twins1] = pullFamily(rel_graph, ind1) #get set of close relatives of ind1
                         sib1.add(ind1)
                         for ii in range(len(moves2)-1,-1,-1):
-                            if moves2[ii] in ['P','C','PC']:
-                                total = total + 1
-                            else: #gp or gc
-                                total = total + 2
+                            if total > 0:
+                                if moves2[ii] in ['P','C','PC']:
+                                    total = total + 1
+                                else: #gp or gc
+                                    total = total + 2
                             for s1 in sib1:
                                 if moves_inds2[ii] < s1:
                                     refined = all_rel[moves_inds2[ii]][s1][3]
@@ -1693,21 +1700,26 @@ def runDRUID(rel_graph, all_rel, inds, args):
                                         else:
                                             refined = all_rel[s1][p][3]
                                         if not [s1,p] in checked:
-                                            results.append([s1, p, total+1, refined, 'graph+inferred'])
+                                            if total > 0:
+                                                results.append([s1, p, total+1, refined, 'graph+inferred'])
+                                            else:
+                                                results.append([s1, p, total, refined, 'graph+inferred'])
                                             addToChecked(s1,p,checked)
 
                         if len(moves1) and len(moves2):
                             total = int(closest_result[2])
                             for i1 in range(len(moves1)-1,-1,-1):
-                                if moves1[i1] in ['P', 'C', 'PC']:
-                                    total = total + 1
-                                else:
-                                    total = total + 2
-                                for i2 in range(len(moves2)-1,-1,-1):
-                                    if moves2[i2] in ['P', 'C', 'PC']:
+                                if total > 0:
+                                    if moves1[i1] in ['P', 'C', 'PC']:
                                         total = total + 1
                                     else:
                                         total = total + 2
+                                for i2 in range(len(moves2)-1,-1,-1):
+                                    if total > 0:
+                                        if moves2[i2] in ['P', 'C', 'PC']:
+                                            total = total + 1
+                                        else:
+                                            total = total + 2
                                     if moves_inds1[i1] < moves_inds2[i2]:
                                         refined = all_rel[moves_inds1[i1]][moves_inds2[i2]][3]
                                     else:
