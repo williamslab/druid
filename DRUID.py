@@ -14,9 +14,12 @@ from DRUID_graph_interaction import *
 import argparse
 import os.path
 
+version='v0.9.6b'
+update='14 Sep 2018'
+
 
 parser=argparse.ArgumentParser(
-    description='''DRUID v0.9.6 -- A multiway relatedness estimator. Last update 12 Sep 2018.''',
+    description="DRUID " + version + " -- A multiway relatedness estimator. Last update " + update,
     epilog="""Outputs file with extension *.DRUID and contains columns [ind1, ind2, DRUID's inferred degree of relatedness, input pairwise IBD1/2 proportions file's inferred degree of relatedness.
      With flag -F, can also output PLINK format .fam files containing first and second degree relationships types which were inferred/provided, outputting multiple .fam files in cases when a parent-child pair is found, but there is not
      enough information to determine who is the parent and who is the child""")
@@ -32,6 +35,9 @@ parser.add_argument('-F', type=int, nargs=1, default=[0], help='Whether to outpu
 args=parser.parse_args()
 
 inds = []
+
+print("DRUID " + version + " -- A multiway relatedness estimator.")
+print("Last update " + update + "\n")
 
 print("Using IBD12 file: "+args.i[0])
 print("Using map file: "+args.m[0])
