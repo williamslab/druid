@@ -145,7 +145,34 @@ def inferFirst(rel_graph, rel_graph_tmp, all_rel, first, second, C):
     #                 addEdgeType
 
 
-def inferSecondPath(rel_graph, rel_graph_tmp, all_rel, second, file_for_segments, outfile, C):
+def readSegments(file_for_segments):
+    all_segs = {}
+
+    IBD_file = open(file_for_segments, 'r')
+    for line in IBD_file:
+        l = str.split(line.rstrip())
+        if l[0] < l[1]:
+            ids = [ l[0], l[1] ]
+        else:
+            ids = [ l[1], l[0] ]
+
+        if not ids[0] in all_segs:
+            all_segs[ ids[0] ] = { ids[1]: [ {}, {} ] }
+        elif not ids[1] in all_segs[ ids[0] ]:
+            all_segs[ ids[0] ][ ids[1] ] = [ {}, {} ]
+        chr = int(l[2])
+        if not chr in all_segs[ ids[0] ][ ids[1] ][0].keys():
+            all_segs[ ids[0] ][ ids[1] ][0][chr] = []
+            all_segs[ ids[0] ][ ids[1] ][1][chr] = []
+        ibd_type = int(str.split(l[3],'IBD')[1])
+        all_segs[ ids[0] ][ ids[1] ][ibd_type - 1][chr].append([float(l[4]), float(l[5])])
+
+    IBD_file.close()
+
+    return all_segs
+
+
+def inferSecondPath(rel_graph, rel_graph_tmp, all_rel, second, all_segs, outfile, C):
     # infer and add 2nd degree relationships
     if C:
         dc_lower = 1/2.0**(9/2.0) #minimum IBD2 for DC classification
@@ -174,7 +201,7 @@ def inferSecondPath(rel_graph, rel_graph_tmp, all_rel, second, file_for_segments
             if len(sibs) > 1:
                 #print('TESTING '+" ".join(sibs)+'\n')
                 second_av = getSecondDegreeRelatives(rel_graph,all_rel,second,sibs,par)
-                [avunc, avunc_hs_all] = getAuntsUncles_IBD011_nonoverlapping_pairs(all_rel, sibs, halfsibs, second_av, file_for_segments, rel_graph)
+                [avunc, avunc_hs_all] = getAuntsUncles_IBD011_nonoverlapping_pairs(all_rel, sibs, halfsibs, second_av, all_segs, rel_graph)
 
                 # add the inferred avuncular relationships to graph
                 for av in avunc:
@@ -307,45 +334,16 @@ def getInferredFromK(K):
         return 0
 
 
-def getIBDsegments(ind1, ind2, file_for_segments):
+def getIBDsegments(ind1, ind2, all_segs):
     # get IBD segments between ind1 and ind2, sorting segments by IBD2, IBD1, and IBD0
-    rand = random.randint(1, 1e10)
-    filename = ind1 + '_' + ind2 + '_' + str(rand) + '.txt'
-    call1 = 'grep "' + ind1 + '" ' + file_for_segments + ' | grep ' + ind2 + ' > ' + filename
-    subprocess.call(call1, shell=True)
+    if ind1 < ind2:
+        ids = [ ind1, ind2 ]
+    else:
+        ids = [ ind2, ind1 ]
+    if not ids[0] in all_segs.keys() or not ids[1] in all_segs[ ids[0] ].keys():
+        return [ {}, {} ]
 
-    all = {}
-    IBD_file = open(filename, 'r')
-    for line in IBD_file:
-        l = str.split(line.rstrip())
-        chr = int(l[2])
-        #chr = int(str.split(l[4],"chr")[1])
-        if not chr in all.keys():
-            all[chr] = []
-        all[chr].append([float(l[4]), float(l[5]), int(str.split(l[3],'IBD')[1])])  # collect all children segments and which haplotype they arose from
-        #all[chr].append([int(l[5]), int(l[6]), ])
-
-    IBD_file.close()
-    call1 = 'rm ' + filename
-    subprocess.call(call1, shell=True)
-
-    #prepare IBD1 and IBD2 dicts
-    IBD1 = {}
-    IBD2 = {}
-    for chr in all.keys():
-        all[chr].sort()
-        for seg in all[chr]:
-            if seg[2] == 1:
-                if not chr in IBD1.keys():
-                    IBD1[chr] = []
-                IBD1[chr].append(seg[0:2]) #only append start and end
-            elif seg[2] == 2:
-                if not chr in IBD2.keys():
-                    IBD2[chr] = []
-                IBD2[chr].append(seg[0:2]) #only append start and end
-
-
-    return [IBD1, IBD2]  # outputs IBD0, IBD1, IBD2
+    return all_segs[ ids[0] ][ ids[1] ]
 
 
 def getIBD0(IBD1,IBD2):
@@ -400,7 +398,7 @@ def mergeIntervals(intervals):
     return merged
 
 
-def collectIBDsegments(sibset,file_for_segments):
+def collectIBDsegments(sibset, all_segs):
     # collect pairwise IBD0,1,2 regions between all pairs of siblings
     IBD_all = {}
     for [ind1, ind2] in itertools.combinations(sibset, 2):
@@ -409,7 +407,7 @@ def collectIBDsegments(sibset,file_for_segments):
 
         IBD_all[ind1][ind2] = []
 
-        tmp = getIBDsegments(ind1, ind2,file_for_segments)
+        tmp = getIBDsegments(ind1, ind2, all_segs)
         tmp0 = getIBD0(tmp[0],tmp[1])
         for chr in tmp0.keys():
             tmp0[chr].sort()
@@ -461,7 +459,7 @@ def collectAllIBDsegments(sibset):
     return [IBD0,IBD1,IBD2]
 
 
-def collectIBDsegmentsSibsAvuncular(sibset, avunc,file_for_segments):  # n is number of individuals
+def collectIBDsegmentsSibsAvuncular(sibset, avunc, all_segs):  # n is number of individuals
     # greedily collect IBD0 regions, then add IBD1 regions, then add IBD2 regions
     IBD_all = {}
     # Collect IBD0/1/2 between sibs and avuncular
@@ -472,7 +470,7 @@ def collectIBDsegmentsSibsAvuncular(sibset, avunc,file_for_segments):  # n is nu
             if not ind2 in IBD_all[ind1].keys():
                 IBD_all[ind1][ind2] = []
 
-            tmp = getIBDsegments(ind1, ind2,file_for_segments)
+            tmp = getIBDsegments(ind1, ind2, all_segs)
             # tmp0 = getIBD0(tmp[0],tmp[1])
             # for chr in tmp0.keys():
             #     tmp0[chr].sort()
@@ -486,7 +484,7 @@ def collectIBDsegmentsSibsAvuncular(sibset, avunc,file_for_segments):  # n is nu
     return IBD_all
 
 
-def collectIBDsegmentsSibsAvuncularCombine(sibset, avunc, file_for_segments):
+def collectIBDsegmentsSibsAvuncularCombine(sibset, avunc, all_segs):
     # greedily collect IBD0 regions, then add IBD1 regions, then add IBD2 regions
     # also merge IBD0/1/2 intervals
     IBD_all = {}
@@ -498,7 +496,7 @@ def collectIBDsegmentsSibsAvuncularCombine(sibset, avunc, file_for_segments):
         tmp_ind1[0] = {}
         tmp_ind1[1] = {}
         for ind2 in avunc:
-            tmp = getIBDsegments(ind1, ind2, file_for_segments) #[IBD1, IBD2]
+            tmp = getIBDsegments(ind1, ind2, all_segs) #[IBD1, IBD2]
             # for chr in tmp[0].keys():
             #     tmp[0][chr].sort()
             # for chr in tmp[1].keys():
@@ -548,8 +546,8 @@ def findOverlap(sibseg, avsib, ss1, sa1, sa2, ranges, Eval):
     # chr = 1
     #
     # For IBD2 between cousins' parents (siblings):
-    # sibseg = collectIBDsegments(sib1, file_for_segments)
-    # avsib = collectIBDsegmentsSibsAvuncularCombine(sib1, sib2, file_for_segments)
+    # sibseg = collectIBDsegments(sib1, all_segs)
+    # avsib = collectIBDsegmentsSibsAvuncularCombine(sib1, sib2, all_segs)
     # IBD011 = findOverlap(sibseg, avsib, 0, 1, 1, {}, 0.5)
     all_seg = {}
     for chr in range(1, 23):
@@ -694,7 +692,7 @@ def findOverlap(sibseg, avsib, ss1, sa1, sa2, ranges, Eval):
 
 
 
-def getSiblingRelativeFamIBDLengthIBD2(sib1, sib2, avunc1, avunc2, file_for_segments):
+def getSiblingRelativeFamIBDLengthIBD2(sib1, sib2, avunc1, avunc2, all_segs):
     #get total IBD length between two sets of relatives (sib1+avunc1 and sib2+avunc2)
     #return length and number of individuals in each set with IBD segments
     sibandav = sib1.copy()
@@ -718,7 +716,7 @@ def getSiblingRelativeFamIBDLengthIBD2(sib1, sib2, avunc1, avunc2, file_for_segm
     avunc2 = list(avunc2)
     for ind1 in sibandav:
         for ind2 in sibandav_rel:
-            tmp = getIBDsegments(ind1, ind2, file_for_segments)
+            tmp = getIBDsegments(ind1, ind2, all_segs)
             # mark if these individuals have segments that were used
             if tmp != [{},{}]:
                 if ind1 in sib1:
@@ -775,7 +773,7 @@ def getExpectedPar(num_sibs):
     return exp
 
 
-def combineBothGPsKeepProportionOnlyExpectation(sib1, avunc1, pc1, sib2, avunc2, pc2, file_for_segments, results_file, rel_graph):
+def combineBothGPsKeepProportionOnlyExpectation(sib1, avunc1, pc1, sib2, avunc2, pc2, all_segs, results_file, rel_graph):
 # perform ancestral genome reconstruction between two groups of related individuals (sib1+avunc1 and sib2+avunc2)
 # infers relatedness between all individuals within the two groups
     if len(sib1) == 1 and len(sib2) == 1 and len(avunc1) == 0 and len(avunc2) == 0:
@@ -795,7 +793,7 @@ def combineBothGPsKeepProportionOnlyExpectation(sib1, avunc1, pc1, sib2, avunc2,
         deg = 'NA'
     else:
         # returns total length of genome IBD between sibandav and sibandav_rel, number of sibs in sib1 with IBD segments, number of sibs in sib2 with IBD segments
-        [tmpsibav, sib1_len, sib2_len, av1_len, av2_len] = getSiblingRelativeFamIBDLengthIBD2(sib1, sib2, avunc1, avunc2, file_for_segments)
+        [tmpsibav, sib1_len, sib2_len, av1_len, av2_len] = getSiblingRelativeFamIBDLengthIBD2(sib1, sib2, avunc1, avunc2, all_segs)
 
         #get proportion of ancestor genome information expected on side 1
         if av1_len != 0:
@@ -866,12 +864,12 @@ def combineBothGPsKeepProportionOnlyExpectation(sib1, avunc1, pc1, sib2, avunc2,
         IBD2=0
         if both and estimated_exp != 1 and K_exp > 1/2.0**(9.0/2):  #check for IBD2 if both sides are being reconstructed, might be reconstructing two sibs; K_exp is 3rd degree or closer
             if len(avunc1) and len(avunc2):
-                sibseg = collectIBDsegments(avunc1, file_for_segments)
-                sibsib = collectIBDsegmentsSibsAvuncularCombine(avunc1, avunc2, file_for_segments)
+                sibseg = collectIBDsegments(avunc1, all_segs)
+                sibsib = collectIBDsegmentsSibsAvuncularCombine(avunc1, avunc2, all_segs)
                 IBD011 = findOverlap(sibseg, sibsib, 0, 1, 1, {}, 0.5)
                 if len(sib2) > 1:  # could be the case that we have one sib and his/her aunts/uncles
-                    sibseg2 = collectIBDsegments(avunc2, file_for_segments)
-                    sibsib2 = collectIBDsegmentsSibsAvuncularCombine(avunc2, avunc1, file_for_segments)
+                    sibseg2 = collectIBDsegments(avunc2, all_segs)
+                    sibsib2 = collectIBDsegmentsSibsAvuncularCombine(avunc2, avunc1, all_segs)
                     IBD011_2 = findOverlap(sibseg2, sibsib2, 0, 1, 1, {}, 0.5)
                     for chr in IBD011_2.keys():
                         if not chr in IBD011.keys():
@@ -880,12 +878,12 @@ def combineBothGPsKeepProportionOnlyExpectation(sib1, avunc1, pc1, sib2, avunc2,
                         IBD011[chr] = mergeIntervals(IBD011[chr])
                 IBD2 = getTotalLength(IBD011)
             elif not len(avunc1) and not len(avunc2):
-                sibseg = collectIBDsegments(sib1, file_for_segments)
-                sibsib = collectIBDsegmentsSibsAvuncularCombine(sib1, sib2, file_for_segments)
+                sibseg = collectIBDsegments(sib1, all_segs)
+                sibsib = collectIBDsegmentsSibsAvuncularCombine(sib1, sib2, all_segs)
                 IBD011 = findOverlap(sibseg, sibsib, 0, 1, 1, {}, 0.5)
                 if len(sib2) > 1: #could be the case that we have one sib and his/her aunts/uncles
-                    sibseg2 = collectIBDsegments(sib2, file_for_segments)
-                    sibsib2 = collectIBDsegmentsSibsAvuncularCombine(sib2, sib1, file_for_segments)
+                    sibseg2 = collectIBDsegments(sib2, all_segs)
+                    sibsib2 = collectIBDsegmentsSibsAvuncularCombine(sib2, sib1, all_segs)
                     IBD011_2 = findOverlap(sibseg2, sibsib2, 0, 1, 1, {}, 0.5)
                     for chr in IBD011_2.keys():
                         if not chr in IBD011.keys():
@@ -1240,7 +1238,7 @@ def getSecondDegreeRelatives(rel_graph,all_rel,second,sibset,par):
 
 
 
-def getAuntsUncles_IBD011_nonoverlapping_pairs(all_rel, sibset, halfsibs, second, file_for_segments, rel_graph):
+def getAuntsUncles_IBD011_nonoverlapping_pairs(all_rel, sibset, halfsibs, second, all_segs, rel_graph):
     # check whether individuals in list 'second' are likely aunts/uncles of 'sibset' and possibly also 'halfsibs'
     avunc = set()
     remove_second = set()
@@ -1265,11 +1263,11 @@ def getAuntsUncles_IBD011_nonoverlapping_pairs(all_rel, sibset, halfsibs, second
         sibset = list(sibset)
         if len(second):
             for [sib1, sib2] in itertools.combinations(sibset,2):
-                sibseg = collectIBDsegments([sib1,sib2],file_for_segments)
+                sibseg = collectIBDsegments([sib1,sib2],all_segs)
                 k = 0
                 while k < len(second):
                     av = second[k]
-                    avsib = collectIBDsegmentsSibsAvuncular([sib1,sib2], [av],file_for_segments)
+                    avsib = collectIBDsegmentsSibsAvuncular([sib1,sib2], [av],all_segs)
                     IBD011 = getTotalLength(findOverlap(sibseg, avsib, 0, 1, 1, {}, 0.5))
                     if IBD011 > 50:
                         avunc.add(av)
@@ -1292,11 +1290,11 @@ def getAuntsUncles_IBD011_nonoverlapping_pairs(all_rel, sibset, halfsibs, second
                 avunc_hs = []
                 for hs in range(0,len(halfsibs)): #hs = index of halfsib set
                     for [sib1,sib2] in itertools.product(sibset,halfsibs[hs]): #all pairs of [sib, halfsib]
-                        sibseg = collectIBDsegments([sib1,sib2], file_for_segments)
+                        sibseg = collectIBDsegments([sib1,sib2], all_segs)
                         k = 0
                         while k < len(second):
                             av = second[k]
-                            avsib = collectIBDsegmentsSibsAvuncular([sib1,sib2], [av], file_for_segments)
+                            avsib = collectIBDsegmentsSibsAvuncular([sib1,sib2], [av], all_segs)
                             IBD011 = getTotalLength(findOverlap(sibseg, avsib, 0, 1, 1, {}, 0.5))
                             if IBD011 > 50:
                                 avunc_hs.add(av)
@@ -1399,7 +1397,7 @@ def checkAndRemove(x,setOrList):
     if x in setOrList:
         setOrList.remove(x)
 
-def runDRUID(rel_graph, all_rel, inds, args):
+def runDRUID(rel_graph, all_rel, inds, all_segs, args):
     # a chunky monkey
     all_results = []
     checked = []
@@ -1560,7 +1558,7 @@ def runDRUID(rel_graph, all_rel, inds, args):
                                             [sib1u, avunc1u_bothsides, nn1u, par1u, child1u, pc1u, gp1u, gc1u, halfsib1u_sets, twins1u] = pullFamily(rel_graph, i1)
                                             sib1u.add(i1)
                                             unused_check = unused_check.union(sib1u)
-                                            results_to_add = combineBothGPsKeepProportionOnlyExpectation(sib1u, [], pc1, sib2, [], pc2, args.s[0], args.i[0], rel_graph)
+                                            results_to_add = combineBothGPsKeepProportionOnlyExpectation(sib1u, [], pc1, sib2, [], pc2, all_segs, args.i[0], rel_graph)
                                             for item in results_to_add:
                                               addToChecked(item[0],item[1],checked)
                                             results = results + results_to_add
@@ -1571,7 +1569,7 @@ def runDRUID(rel_graph, all_rel, inds, args):
                                             [sib2u, avunc2u_bothsides, nn2u, par2u, child2u, pc2u, gp2u, gc2u, halfsib2u_sets, twins2u] = pullFamily(rel_graph, i2)
                                             sib2u.add(ind2)
                                             unused_check = unused_check.union(sib2u)
-                                            results_to_add = combineBothGPsKeepProportionOnlyExpectation(sib1, [], pc1, sib2u, [], pc2, args.s[0], args.i[0], rel_graph)
+                                            results_to_add = combineBothGPsKeepProportionOnlyExpectation(sib1, [], pc1, sib2u, [], pc2, all_segs, args.i[0], rel_graph)
                                             for item in results_to_add:
                                               addToChecked(item[0],item[1],checked)
                                             results = results + results_to_add
@@ -1581,7 +1579,7 @@ def runDRUID(rel_graph, all_rel, inds, args):
                             relavunc2 = []
 
                         if relavunc1 != 'av' and relavunc2 != 'av':
-                            results_tmp = combineBothGPsKeepProportionOnlyExpectation(sib1, relavunc1, pc1, sib2, relavunc2, pc2, args.s[0], args.i[0], rel_graph)
+                            results_tmp = combineBothGPsKeepProportionOnlyExpectation(sib1, relavunc1, pc1, sib2, relavunc2, pc2, all_segs, args.i[0], rel_graph)
                         else:
                             # sibset1's aunt/uncle is in sibset2 (sibset2 = aunts/uncles of sibset1)
                             results_tmp = []

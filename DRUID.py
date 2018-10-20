@@ -14,8 +14,8 @@ from DRUID_graph_interaction import *
 import argparse
 import os.path
 
-version='v0.9.6b'
-update='14 Sep 2018'
+version='v0.9.7b'
+update='19 Oct 2018'
 
 
 parser=argparse.ArgumentParser(
@@ -71,12 +71,14 @@ if args.f[0] != '':
 print("\nInferring first degree relatives")
 inferFirst(rel_graph, rel_graph_tmp, all_rel, first, second, int(args.C[0]))
 
+all_segs = readSegments(args.s[0])
+
 # infer second degree & aunts/uncles of sibling sets
 print("\nInferring second degree relatives")
-inferSecondPath(rel_graph, rel_graph_tmp, all_rel, second, args.s[0], args.o[0], int(args.C[0]))
+inferSecondPath(rel_graph, rel_graph_tmp, all_rel, second, all_segs, args.o[0], int(args.C[0]))
 print('\n')
 
-all_results = runDRUID(rel_graph, all_rel, inds, args)
+all_results = runDRUID(rel_graph, all_rel, inds, all_segs, args)
 
 if args.F[0] == 1:
     print("\nPrinting .fam files")
