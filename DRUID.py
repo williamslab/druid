@@ -1,21 +1,12 @@
 #!/usr/bin/env python
 
-import subprocess
-import sys
-import Bio
-import itertools
 import networkx as nx
-import random
-import copy
-import numpy as np
-import glob, os
 from DRUID_functions import *
 from DRUID_graph_interaction import *
 import argparse
-import os.path
 
-version='v0.9.7b'
-update='19 Oct 2018'
+version='v1.02'
+update='20 Oct 2018'
 
 
 parser=argparse.ArgumentParser(
@@ -52,8 +43,8 @@ else:
     print("Print fam files = FALSE")
 
 # Get map info
-global total_genome, chrom_starts, chrom_ends
-[total_genome, chrom_starts, chrom_ends] = getChrInfo(args.m[0])
+global total_genome, chrom_name_to_idx, chrom_idx_to_name, chrom_starts, chrom_ends, num_chrs
+[total_genome, chrom_name_to_idx, chrom_idx_to_name, chrom_starts, chrom_ends, num_chrs] = getChrInfo(args.m[0])
 print("Genome length: " + str(total_genome)+'\n')
 
 # Get IBD1/2 info

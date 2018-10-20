@@ -1,16 +1,9 @@
-import subprocess
-import sys
-import Bio
 import itertools
 import networkx as nx
-import random
 import copy
-import numpy as np
-import os
 from DRUID_graph_interaction import *
 
-
-global total_genome
+global total_genome, chrom_name_to_idx, chrom_idx_to_name, num_chrs
 
 degrees = {'MZ': 1/2.0**(3.0/2), 1: 1/2.0**(5.0/2), 2: 1/2.0**(7.0/2), 3: 1/2.0**(9.0/2), 4: 1/2.0**(11.0/2), 5: 1/2.0**(13.0/2), 6: 1/2.0**(15.0/2), 7: 1/2.0**(17.0/2), 8: 1/2.0**(19.0/2), 9: 1/2.0**(21.0/2), 10: 1/2.0**(23.0/2), 11: 1/2.0**(25.0/2), 12: 1/2.0**(27/2.0), 13: 1/2.0**(29.0/2)}  # threshold values for each degree of relatedness
 
@@ -157,14 +150,14 @@ def readSegments(file_for_segments):
             ids = [ l[1], l[0] ]
 
         if not ids[0] in all_segs:
-            all_segs[ ids[0] ] = { ids[1]: [ {}, {} ] }
+            all_segs[ ids[0] ] = \
+                    { ids[1]: [ { chr : [] for chr in range(num_chrs) } for _ in range(2) ] }
         elif not ids[1] in all_segs[ ids[0] ]:
-            all_segs[ ids[0] ][ ids[1] ] = [ {}, {} ]
-        chr = int(l[2])
-        if not chr in all_segs[ ids[0] ][ ids[1] ][0].keys():
-            all_segs[ ids[0] ][ ids[1] ][0][chr] = []
-            all_segs[ ids[0] ][ ids[1] ][1][chr] = []
-        ibd_type = int(str.split(l[3],'IBD')[1])
+            all_segs[ ids[0] ][ ids[1] ] = \
+                                [ { chr : [] for chr in range(num_chrs) } for _ in range(2) ]
+        chrom_name = l[2]
+        chr = chrom_name_to_idx[chrom_name]
+        ibd_type = int(l[3][3]) # chop "IBD" off, get integer type IBD_1_ or 2
         all_segs[ ids[0] ][ ids[1] ][ibd_type - 1][chr].append([float(l[4]), float(l[5])])
 
     IBD_file.close()
@@ -276,19 +269,26 @@ def getFamInfo(famfile, inds):
 
 def getChrInfo(mapfile):
     #read in information from .map file
-    global chrom_starts
-    global chrom_ends
-    global total_genome
-    chrom_starts = {}
-    chrom_ends = {}
-    for chr in range(1,23):
-        chrom_starts[chr] = 9999999
-        chrom_ends[chr] = 0
+    global total_genome, chrom_name_to_idx, chrom_idx_to_name, chrom_starts, chrom_ends, num_chrs
+    chrom_name_to_idx = {}
+    chrom_idx_to_name = []
+    chrom_starts = []
+    chrom_ends = []
+    num_chrs = 0
 
     file = open(mapfile,'r')
     for line in file:
         l = str.split(line.rstrip())
-        chr = float(l[0])
+        chr_name = l[0]
+        if not chr_name in chrom_name_to_idx.keys():
+            chrom_name_to_idx[chr_name] = chr = num_chrs
+            chrom_idx_to_name.append(chr_name)
+            num_chrs += 1
+            chrom_starts.append(99999999)
+            chrom_ends.append(0)
+        else:
+            chr = chrom_name_to_idx[chr_name]
+
         pos = float(l[2])
         if chrom_starts[chr] > pos:
             chrom_starts[chr] = pos
@@ -298,10 +298,10 @@ def getChrInfo(mapfile):
     file.close()
 
     total_genome = 0
-    for chr in range(1,23):
-        total_genome = total_genome + chrom_ends[chr] - chrom_starts[chr]
+    for chr in range(num_chrs):
+        total_genome += chrom_ends[chr] - chrom_starts[chr]
 
-    return [total_genome, chrom_starts, chrom_ends]
+    return [total_genome, chrom_name_to_idx, chrom_idx_to_name, chrom_starts, chrom_ends, num_chrs]
 
 
 def getInferredFromK(K):
@@ -341,38 +341,29 @@ def getIBDsegments(ind1, ind2, all_segs):
     else:
         ids = [ ind2, ind1 ]
     if not ids[0] in all_segs.keys() or not ids[1] in all_segs[ ids[0] ].keys():
-        return [ {}, {} ]
+        return [ { chr : [] for chr in range(num_chrs) } for _ in range(2) ]
 
     return all_segs[ ids[0] ][ ids[1] ]
 
 
 def getIBD0(IBD1,IBD2):
-    IBD12 = {} #IBD12 = regions that are IBD (IBD1 or IBD2)
-    for chr in IBD1.keys():
-        IBD12[chr] = []
-        for k in IBD1[chr]:
-            IBD12[chr].append(k)
+    #IBD12 = regions that are IBD (IBD1 or IBD2)
+    IBD12 = { chr : mergeIntervals(IBD1[chr] + IBD2[chr])
+              for chr in range(num_chrs) }
 
-    for chr in IBD2.keys():
-        if not chr in IBD12.keys():
-            IBD12[chr] = []
-        for k in IBD2[chr]:
-            IBD12[chr].append(k)
-        IBD12[chr] = mergeIntervals(IBD12[chr][:])
-
-    IBD0 = {}
-    for chr in IBD12.keys():
-        IBD0[chr] = []
+    IBD0 = { chr : [] for chr in range(num_chrs) }
+    for chr in range(num_chrs):
         if len(IBD12[chr]) > 0:
             if IBD12[chr][0][0] > chrom_starts[chr]:
-                IBD0[chr].append([chrom_starts[chr], IBD12[chr][0][0] - 1])
+                IBD0[chr].append([chrom_starts[chr], IBD12[chr][0][0]])
             if len(IBD12[chr]) > 1:
                 for k in range(1, len(IBD12[chr])):
                     if IBD12[chr][k - 1][1] != IBD12[chr][k][0]:
                         IBD0[chr].append([IBD12[chr][k - 1][1], IBD12[chr][k][0]])
                 if IBD12[chr][k][1] < chrom_ends[chr]:
                     IBD0[chr].append([IBD12[chr][k][1], chrom_ends[chr]])
-        IBD0[chr] = mergeIntervals(IBD0[chr][:])
+            else:
+                IBD0[chr].append([IBD12[chr][0][1], chrom_ends[chr]])
 
     return IBD0
 
@@ -405,15 +396,13 @@ def collectIBDsegments(sibset, all_segs):
         if not ind1 in IBD_all.keys():
             IBD_all[ind1] = {}
 
-        IBD_all[ind1][ind2] = []
+        IBD_all[ind1][ind2] = None
 
         tmp = getIBDsegments(ind1, ind2, all_segs)
         tmp0 = getIBD0(tmp[0],tmp[1])
-        for chr in tmp0.keys():
+        for chr in range(num_chrs):
             tmp0[chr].sort()
-        for chr in tmp[0].keys():
             tmp[0][chr].sort()
-        for chr in tmp[1].keys():
             tmp[1][chr].sort()
 
         IBD_all[ind1][ind2] = [tmp0, tmp[0], tmp[1]]
@@ -425,35 +414,20 @@ any_in = lambda a, b: any(i in b for i in a)
 
 def collectAllIBDsegments(sibset):
     # greedily collect IBD0 regions, then add IBD1 regions, then add IBD2 regions
-    IBD0 = {}
-    IBD1 = {}
-    IBD2 = {}
+    IBD0 = { chr : [] for chr in range(num_chrs) }
+    IBD1 = { chr : [] for chr in range(num_chrs) }
+    IBD2 = { chr : [] for chr in range(num_chrs) }
     for [ind1, ind2] in itertools.combinations(sibset, 2):
         tmp = getIBDsegments(ind1, ind2)
         tmp0 = getIBD0(tmp[0],tmp[1])
-        for chr in tmp0.keys():
-            if not chr in IBD0.keys():
-                IBD0[chr] = []
-            for seg in tmp0[chr]:
-                IBD0[chr].append(seg)
+        for chr in range(num_chrs):
+            IBD0[chr] += tmp0[chr]
+            IBD1[chr] += tmp[0][chr]
+            IBD2[chr] += tmp[1][chr]
 
-        for chr in tmp[0].keys():
-            if not chr in IBD1.keys():
-                IBD1[chr] = []
-            for seg in tmp[0][chr]:
-                IBD1[chr].append(seg)
-
-        for chr in tmp[1].keys():
-            if not chr in IBD2.keys():
-                IBD2[chr] = []
-            for seg in tmp[1][chr]:
-                IBD2[chr].append(seg)
-
-    for chr in IBD0.keys():
+    for chr in range(num_chrs):
         IBD0[chr] = mergeIntervals(IBD0[chr][:])
-    for chr in IBD1.keys():
         IBD1[chr] = mergeIntervals(IBD1[chr][:])
-    for chr in IBD2.keys():
         IBD2[chr] = mergeIntervals(IBD2[chr][:])
 
     return [IBD0,IBD1,IBD2]
@@ -468,15 +442,13 @@ def collectIBDsegmentsSibsAvuncular(sibset, avunc, all_segs):  # n is number of 
             IBD_all[ind1] = {}
         for ind2 in avunc:
             if not ind2 in IBD_all[ind1].keys():
-                IBD_all[ind1][ind2] = []
+                IBD_all[ind1][ind2] = None
 
             tmp = getIBDsegments(ind1, ind2, all_segs)
-            # tmp0 = getIBD0(tmp[0],tmp[1])
-            # for chr in tmp0.keys():
-            #     tmp0[chr].sort()
-            for chr in tmp[0].keys():
+            #tmp0 = getIBD0(tmp[0],tmp[1])
+            for chr in range(num_chrs):
+                #tmp0[chr].sort()
                 tmp[0][chr].sort()
-            for chr in tmp[1].keys():
                 tmp[1][chr].sort()
 
             IBD_all[ind1][ind2] = [[],tmp[0],tmp[1]]
@@ -492,27 +464,19 @@ def collectIBDsegmentsSibsAvuncularCombine(sibset, avunc, all_segs):
     for ind1 in sibset:
         IBD_all[ind1] = {}
         IBD_all[ind1]['A'] = []
-        tmp_ind1 = {}
-        tmp_ind1[0] = {}
-        tmp_ind1[1] = {}
+        tmp_ind1 = [ { chr : [] for chr in range(num_chrs) } for _ in range(2) ]
         for ind2 in avunc:
             tmp = getIBDsegments(ind1, ind2, all_segs) #[IBD1, IBD2]
-            # for chr in tmp[0].keys():
+            # for chr in range(num_chrs):
             #     tmp[0][chr].sort()
-            # for chr in tmp[1].keys():
+            # for chr in range(num_chrs):
             #     tmp[1][chr].sort()
-            for chr in tmp[0].keys():
-                if not chr in tmp_ind1[0].keys():
-                    tmp_ind1[0][chr] = []
-                tmp_ind1[0][chr] = tmp_ind1[0][chr] + tmp[0][chr]
-            for chr in tmp[1].keys():
-                if not chr in tmp_ind1[1].keys():
-                    tmp_ind1[1][chr] = []
-                tmp_ind1[1][chr] = tmp_ind1[1][chr] + tmp[1][chr]
+            for chr in range(num_chrs):
+                tmp_ind1[0][chr] += tmp[0][chr]
+                tmp_ind1[1][chr] += tmp[1][chr]
 
-        for chr in tmp_ind1[0].keys():
+        for chr in range(num_chrs):
             tmp_ind1[0][chr] = mergeIntervals(tmp_ind1[0][chr][:])
-        for chr in tmp_ind1[1].keys():
             tmp_ind1[1][chr] = mergeIntervals(tmp_ind1[1][chr][:])
 
         IBD_all[ind1]['A'] = [{},tmp_ind1[0],tmp_ind1[1]] #return IBD1, IBD2
@@ -530,7 +494,7 @@ def checkOverlap(range1, range2):
 
 
 
-def findOverlap(sibseg, avsib, ss1, sa1, sa2, ranges, Eval):
+def findOverlap(sibseg, avsib, ss1, sa1, sa2, Eval):
     # Find regions of the genome which have sibling and avuncular IBD states as defined by ss1, sa1, sa2
     # ranges = ranges we already have in place and therefore cannot overlap; we update and return ranges with added info
     # Eval = expected amount of parent genome we get with this ss1/sa1/sa2 combination
@@ -543,18 +507,14 @@ def findOverlap(sibseg, avsib, ss1, sa1, sa2, ranges, Eval):
     # ss1 = 0
     # sa1 = 0
     # sa2 = 0
-    # chr = 1
     #
     # For IBD2 between cousins' parents (siblings):
     # sibseg = collectIBDsegments(sib1, all_segs)
     # avsib = collectIBDsegmentsSibsAvuncularCombine(sib1, sib2, all_segs)
-    # IBD011 = findOverlap(sibseg, avsib, 0, 1, 1, {}, 0.5)
-    all_seg = {}
-    for chr in range(1, 23):
-        if not chr in ranges.keys():
-            ranges[chr] = []
-        if not chr in all_seg.keys():
-            all_seg[chr] = []
+    # IBD011 = findOverlap(sibseg, avsib, 0, 1, 1, 0.5)
+    all_seg = { chr : [] for chr in range(num_chrs) }
+    ranges = { chr : [] for chr in range(num_chrs) }
+    for chr in range(num_chrs):
         for sib1 in sibseg.keys():
             for sib2 in sibseg[sib1].keys():
                 for av in avsib[sib1].keys():  # avsib[sib1].keys() and avsib[sib2].keys() are the same
@@ -563,7 +523,7 @@ def findOverlap(sibseg, avsib, ss1, sa1, sa2, ranges, Eval):
                     kav1 = 0
                     kav2 = 0
                     krange_cont = 0
-                    while chr in sibseg[sib1][sib2][ss1].keys() and chr in avsib[sib1][av][sa1].keys() and chr in avsib[sib2][av][sa2].keys() and ksib < len(sibseg[sib1][sib2][ss1][chr]) and kav1 < len(avsib[sib1][av][sa1][chr]) and kav2 < len(avsib[sib2][av][sa2][chr]):
+                    while ksib < len(sibseg[sib1][sib2][ss1][chr]) and kav1 < len(avsib[sib1][av][sa1][chr]) and kav2 < len(avsib[sib2][av][sa2][chr]):
 
                         if checkOverlap(sibseg[sib1][sib2][ss1][chr][ksib],
                                         avsib[sib1][av][sa1][chr][kav1]) and checkOverlap(
@@ -600,7 +560,8 @@ def findOverlap(sibseg, avsib, ss1, sa1, sa2, ranges, Eval):
                                                 if new_range[0] != new_range[1]:
                                                     range_new.append(new_range)
                                                 if new_range[0] > new_range[1]:
-                                                    print('ERROR: '+sib1+'\t'+sib2+'\t'+av+'\t'+str(chr) + '\t' + str(ranges[chr][krange][1]) + '\t' + str(
+                                                    chr_name = chrom_idx_to_name[chr]
+                                                    print('ERROR: '+sib1+'\t'+sib2+'\t'+av+'\t'+ chr_name + '\t' + str(ranges[chr][krange][1]) + '\t' + str(
                                                         ranges[chr][krange + 1][0]) + '\n')
                                             else:
                                                 range_new.append(
@@ -684,8 +645,7 @@ def findOverlap(sibseg, avsib, ss1, sa1, sa2, ranges, Eval):
                             kav2 = kav2 + 1
                             krange_cont = 0
 
-                    for seg in ranges_to_append:
-                        ranges[chr].append(seg)
+                    ranges[chr] += ranges_to_append
                     ranges[chr].sort()
 
     return ranges
@@ -704,12 +664,12 @@ def getSiblingRelativeFamIBDLengthIBD2(sib1, sib2, avunc1, avunc2, all_segs):
         sibandav_rel.add(avunc)
 
 
-    all_seg_IBD1 = {}
-    all_seg_IBD2 = {}
-    has_seg_sib1 = [0 for x in range(0,len(sib1))]
-    has_seg_sib2 = [0 for x in range(0, len(sib2))]
-    has_seg_avunc1 = [0 for x in range(0,len(avunc1))]
-    has_seg_avunc2 = [0 for x in range(0, len(avunc2))]
+    all_seg_IBD1 = { chr : [] for chr in range(num_chrs) }
+    all_seg_IBD2 = { chr : [] for chr in range(num_chrs) }
+    has_seg_sib1 = [0 for x in range(len(sib1))]
+    has_seg_sib2 = [0 for x in range(len(sib2))]
+    has_seg_avunc1 = [0 for x in range(len(avunc1))]
+    has_seg_avunc2 = [0 for x in range(len(avunc2))]
     sib1 = list(sib1)
     sib2 = list(sib2)
     avunc1 = list(avunc1)
@@ -717,36 +677,28 @@ def getSiblingRelativeFamIBDLengthIBD2(sib1, sib2, avunc1, avunc2, all_segs):
     for ind1 in sibandav:
         for ind2 in sibandav_rel:
             tmp = getIBDsegments(ind1, ind2, all_segs)
-            # mark if these individuals have segments that were used
-            if tmp != [{},{}]:
-                if ind1 in sib1:
-                    has_seg_sib1[sib1.index(ind1)] = 1
-                elif ind1 in avunc1:
-                    has_seg_avunc1[avunc1.index(ind1)] = 1
-                if ind2 in sib2:
-                    has_seg_sib2[sib2.index(ind2)] = 1
-                elif ind2 in avunc2:
-                    has_seg_avunc2[avunc2.index(ind2)] = 1
-            for chr in tmp[0].keys():  # add IBD1
-                if not chr in all_seg_IBD1.keys():
-                    all_seg_IBD1[chr] = []
-                for seg in tmp[0][chr]:
-                    all_seg_IBD1[chr].append(seg)
-            for chr in tmp[1].keys():  # add IBD2
-                if not chr in all_seg_IBD2.keys():
-                    all_seg_IBD2[chr] = []
-                for seg in tmp[1][chr]:
-                    all_seg_IBD2[chr].append(seg)
+            for chr in range(num_chrs):  # add IBD1
+                if len(tmp[0][chr]) > 0 or len(tmp[1][chr]) > 0:
+                    # mark if these individuals have segments that were used
+                    if ind1 in sib1:
+                        has_seg_sib1[sib1.index(ind1)] = 1
+                    elif ind1 in avunc1:
+                        has_seg_avunc1[avunc1.index(ind1)] = 1
+                    if ind2 in sib2:
+                        has_seg_sib2[sib2.index(ind2)] = 1
+                    elif ind2 in avunc2:
+                        has_seg_avunc2[avunc2.index(ind2)] = 1
+                    all_seg_IBD1[chr] += tmp[0][chr]
+                    all_seg_IBD2[chr] += tmp[1][chr]
 
     IBD_sum = 0
-    for chr in all_seg_IBD1:
+    for chr in range(num_chrs):
         all_seg_IBD1[chr] = mergeIntervals(all_seg_IBD1[chr][:])
         for seg in all_seg_IBD1[chr]:
-            IBD_sum = IBD_sum + seg[1] - seg[0]
-    for chr in all_seg_IBD2:
+            IBD_sum += seg[1] - seg[0]
         all_seg_IBD2[chr] = mergeIntervals(all_seg_IBD2[chr][:])
         for seg in all_seg_IBD2[chr]:
-            IBD_sum = IBD_sum + 2.0*(seg[1] - seg[0])
+            IBD_sum += 2.0*(seg[1] - seg[0])
 
 
     return [IBD_sum, sum(has_seg_sib1), sum(has_seg_sib2), sum(has_seg_avunc1), sum(has_seg_avunc2)]
@@ -866,29 +818,25 @@ def combineBothGPsKeepProportionOnlyExpectation(sib1, avunc1, pc1, sib2, avunc2,
             if len(avunc1) and len(avunc2):
                 sibseg = collectIBDsegments(avunc1, all_segs)
                 sibsib = collectIBDsegmentsSibsAvuncularCombine(avunc1, avunc2, all_segs)
-                IBD011 = findOverlap(sibseg, sibsib, 0, 1, 1, {}, 0.5)
+                IBD011 = findOverlap(sibseg, sibsib, 0, 1, 1, 0.5)
                 if len(sib2) > 1:  # could be the case that we have one sib and his/her aunts/uncles
                     sibseg2 = collectIBDsegments(avunc2, all_segs)
                     sibsib2 = collectIBDsegmentsSibsAvuncularCombine(avunc2, avunc1, all_segs)
-                    IBD011_2 = findOverlap(sibseg2, sibsib2, 0, 1, 1, {}, 0.5)
-                    for chr in IBD011_2.keys():
-                        if not chr in IBD011.keys():
-                            IBD011[chr] = []
-                        IBD011[chr] = IBD011[chr] + IBD011_2[chr]
+                    IBD011_2 = findOverlap(sibseg2, sibsib2, 0, 1, 1, 0.5)
+                    for chr in range(num_chrs):
+                        IBD011[chr] += IBD011_2[chr]
                         IBD011[chr] = mergeIntervals(IBD011[chr])
                 IBD2 = getTotalLength(IBD011)
             elif not len(avunc1) and not len(avunc2):
                 sibseg = collectIBDsegments(sib1, all_segs)
                 sibsib = collectIBDsegmentsSibsAvuncularCombine(sib1, sib2, all_segs)
-                IBD011 = findOverlap(sibseg, sibsib, 0, 1, 1, {}, 0.5)
+                IBD011 = findOverlap(sibseg, sibsib, 0, 1, 1, 0.5)
                 if len(sib2) > 1: #could be the case that we have one sib and his/her aunts/uncles
                     sibseg2 = collectIBDsegments(sib2, all_segs)
                     sibsib2 = collectIBDsegmentsSibsAvuncularCombine(sib2, sib1, all_segs)
-                    IBD011_2 = findOverlap(sibseg2, sibsib2, 0, 1, 1, {}, 0.5)
-                    for chr in IBD011_2.keys():
-                        if not chr in IBD011.keys():
-                            IBD011[chr] = []
-                        IBD011[chr] = IBD011[chr] + IBD011_2[chr]
+                    IBD011_2 = findOverlap(sibseg2, sibsib2, 0, 1, 1, 0.5)
+                    for chr in range(num_chrs):
+                        IBD011[chr] += IBD011_2[chr]
                         IBD011[chr] = mergeIntervals(IBD011[chr])
                 IBD2 = getTotalLength(IBD011)
 
@@ -1134,9 +1082,9 @@ def checkRelevantAuntsUncles(sibset1, sibset2, avunc1_bothsides, avunc2_bothside
 def getTotalLength(IBD):
     # get length of IBD segments
     total = 0
-    for chr in IBD.keys():
+    for chr in range(num_chrs):
         for seg in IBD[chr]:
-            total = total + seg[1] - seg[0]
+            total += seg[1] - seg[0]
 
     return total
 
@@ -1268,7 +1216,7 @@ def getAuntsUncles_IBD011_nonoverlapping_pairs(all_rel, sibset, halfsibs, second
                 while k < len(second):
                     av = second[k]
                     avsib = collectIBDsegmentsSibsAvuncular([sib1,sib2], [av],all_segs)
-                    IBD011 = getTotalLength(findOverlap(sibseg, avsib, 0, 1, 1, {}, 0.5))
+                    IBD011 = getTotalLength(findOverlap(sibseg, avsib, 0, 1, 1, 0.5))
                     if IBD011 > 50:
                         avunc.add(av)
                         k = k + 1
@@ -1295,7 +1243,7 @@ def getAuntsUncles_IBD011_nonoverlapping_pairs(all_rel, sibset, halfsibs, second
                         while k < len(second):
                             av = second[k]
                             avsib = collectIBDsegmentsSibsAvuncular([sib1,sib2], [av], all_segs)
-                            IBD011 = getTotalLength(findOverlap(sibseg, avsib, 0, 1, 1, {}, 0.5))
+                            IBD011 = getTotalLength(findOverlap(sibseg, avsib, 0, 1, 1, 0.5))
                             if IBD011 > 50:
                                 avunc_hs.add(av)
                                 # avsibs = getSibsFromGraph(rel_graph, av)
@@ -1370,10 +1318,6 @@ def checkUseHalfsibs(sibs,halfsib_sets,rel,all_rel):
         return []
 
 
-def addToChecked(ind1,ind2,checked):
-    checked.append([ind1,ind2])
-    checked.append([ind2,ind1])
-
 def pairInAllRel(ind1,ind2,all_rel):
     if ind1 in all_rel.keys() and ind2 in all_rel[ind1].keys():
         return 1
@@ -1400,10 +1344,12 @@ def checkAndRemove(x,setOrList):
 def runDRUID(rel_graph, all_rel, inds, all_segs, args):
     # a chunky monkey
     all_results = []
-    checked = []
+    checked = set()
     for [ind1,ind2] in itertools.combinations(inds,2): #test each pair of individuals
-        if not [ind1,ind2] in checked and [ind2,ind1] not in checked: #if pair not yet tested
-            print("Comparing "+ind1+" and "+ind2)
+        if ind1 < ind2: pair_name = ind1 + "$" + ind2
+        else:           pair_name = ind2 + "$" + ind1
+        if not pair_name in checked: #if pair not yet tested
+            #print("Comparing "+ind1+" and "+ind2)
             results = []
             #if the pair is already connected via graph, output that relationship
             [sib1, avunc1_bothsides, nn1, par1, child1, pc1, gp1, gc1, halfsib1_sets, twins1] = pullFamily(rel_graph, ind1)
@@ -1411,7 +1357,7 @@ def runDRUID(rel_graph, all_rel, inds, all_segs, args):
             sib1.add(ind1)
             sib2.add(ind2)
             if rel_graph.has_edge(ind1, ind2) and (rel_graph.get_edge_data(ind1,ind2)['type'] in ['FS','PC'] or ((len(sib1) > 1 and checkSibs(sib1,ind2)) or len(sib1) == 1) and ((len(sib2) > 1 and checkSibs(sib2,ind1)) or len(sib2) == 1)):
-                checked.append([ind1,ind2])
+                checked.add(pair_name)
                 if ind1 < ind2:
                     refined = all_rel[ind1][ind2][3]
                 else:
@@ -1560,7 +1506,9 @@ def runDRUID(rel_graph, all_rel, inds, all_segs, args):
                                             unused_check = unused_check.union(sib1u)
                                             results_to_add = combineBothGPsKeepProportionOnlyExpectation(sib1u, [], pc1, sib2, [], pc2, all_segs, args.i[0], rel_graph)
                                             for item in results_to_add:
-                                              addToChecked(item[0],item[1],checked)
+                                                if item[0] < item[1]: this_pair = item[0] + "$" + item[1]
+                                                else:                 this_pair = item[1] + "$" + item[0]
+                                                checked.add(this_pair)
                                             results = results + results_to_add
                                 if len(unused2):
                                     unused_check = set()
@@ -1571,7 +1519,9 @@ def runDRUID(rel_graph, all_rel, inds, all_segs, args):
                                             unused_check = unused_check.union(sib2u)
                                             results_to_add = combineBothGPsKeepProportionOnlyExpectation(sib1, [], pc1, sib2u, [], pc2, all_segs, args.i[0], rel_graph)
                                             for item in results_to_add:
-                                              addToChecked(item[0],item[1],checked)
+                                                if item[0] < item[1]: this_pair = item[0] + "$" + item[1]
+                                                else:                 this_pair = item[1] + "$" + item[0]
+                                                checked.add(this_pair)
                                             results = results + results_to_add
 
                         else:
@@ -1584,10 +1534,12 @@ def runDRUID(rel_graph, all_rel, inds, all_segs, args):
                             # sibset1's aunt/uncle is in sibset2 (sibset2 = aunts/uncles of sibset1)
                             results_tmp = []
                         for resu in results_tmp:
-                            if not [resu[0],resu[1]] in checked:
+                            if resu[0] < resu[1]: this_pair = resu[0] + "$" + resu[1]
+                            else:                 this_pair = resu[1] + "$" + resu[0]
+                            if not this_pair in checked:
                                 resu.append('inferred')
                                 results.append(resu)
-                                addToChecked(resu[0],resu[1],checked)
+                                checked.add(this_pair)
                         if ind1_original != ind1 or ind2_original != ind2:
                             for res in results_tmp:
                                 if (res[0] == ind1 and res[1] == ind2) or (res[0] == ind2 and res[1] == ind1):
@@ -1618,41 +1570,49 @@ def runDRUID(rel_graph, all_rel, inds, all_segs, args):
                                 refined = all_rel[moves_inds1[ii]][ind2][3]
                             else:
                                 refined = all_rel[ind2][moves_inds1[ii]][3]
-                            if not [moves_inds1[ii],ind2] in checked:
+                            if moves_inds1[ii] < ind2: this_pair = moves_inds1[ii] + "$" + ind2
+                            else:                      this_pair = ind2 + "$" + moves_inds1[ii]
+                            if not this_pair in checked:
                                 results.append([moves_inds1[ii],ind2,total,refined, 'graph+inferred'])
-                                addToChecked(moves_inds1[ii],ind2,checked)
+                                checked.add(this_pair)
                             #check for close relatives of moves_inds[ii]
                             [sib1, avunc1_bothsides, nn1, par1, child1, pc1, gp1, gc1, halfsib1_sets, twins1] = pullFamily(rel_graph, moves_inds1[ii])
                             for s1 in sib1:
                                 if s1 < ind2:
                                     refined = all_rel[s1][ind2][3]
+                                    this_pair = s1 + "$" + ind2
                                 else:
                                     refined = all_rel[ind2][s1][3]
-                                if not [s1,ind2] in checked:
+                                    this_pair = ind2 + "$" + s1
+                                if not this_pair in checked:
                                     results.append([s1, ind2, total, refined, 'graph+inferred'])
-                                    addToChecked(s1,ind2,checked)
+                                    checked.add(this_pair)
                             sib1.add(moves_inds1[ii])
                             hs1 = checkUseHalfsibs(sib1, halfsib1_sets, ind2, all_rel)
                             for h1 in hs1:
                                 if h1 < ind2:
                                     refined = all_rel[h1][ind2][3]
+                                    this_pair = h1 + "$" + ind2
                                 else:
                                     refined = all_rel[ind2][h1][3]
-                                if not [h1,ind2] in checked:
+                                    this_pair = ind2 + "$" + h1
+                                if not this_pair in checked:
                                     results.append([h1,ind2,total,refined, 'graph+inferred'])
-                                    addToChecked(h1,ind2,checked)
+                                    checked.add(this_pair)
                             for p in pc1:
                                 if not p in moves_inds1:  # if we didn't travel through this relationship already
                                     if p < ind2:
                                         refined = all_rel[p][ind2][3]
+                                        this_pair = p + "$" + ind2
                                     else:
                                         refined = all_rel[ind2][p][3]
-                                    if not [p,ind2] in checked:
+                                        this_pair = ind2 + "$" + p
+                                    if not this_pair in checked:
                                         if total > 0:
                                             results.append([p,ind2,total+1,refined,'graph+inferred'])
                                         else:
                                             results.append([p,ind2,total,refined,'graph+inferred'])
-                                        addToChecked(p,ind2,checked)
+                                        checked.add(this_pair)
 
                         total = int(closest_result[2])
                         [sib1, avunc1_bothsides, nn1, par1, child1, pc1, gp1, gc1, halfsib1_sets, twins1] = pullFamily(rel_graph, ind1) #get set of close relatives of ind1
@@ -1666,43 +1626,51 @@ def runDRUID(rel_graph, all_rel, inds, all_segs, args):
                             for s1 in sib1:
                                 if moves_inds2[ii] < s1:
                                     refined = all_rel[moves_inds2[ii]][s1][3]
+                                    this_pair = moves_inds2[ii] + "$" + s1
                                 else:
                                     refined = all_rel[s1][moves_inds2[ii]][3]
-                                if not [s1,moves_inds2[ii]] in checked:
+                                    this_pair = s1 + "$" + moves_inds2[ii]
+                                if not this_pair in checked:
                                     results.append([s1,moves_inds2[ii],total,refined, 'graph+inferred'])
-                                    addToChecked(s1,moves_inds2[ii],checked)
+                                    checked.add(this_pair)
                                 #check for close relatives of moves_inds[ii]
                                 [sib2, avunc2_bothsides, nn2, par2, child2, pc2, gp2, gc2, halfsib2_sets, twins2] = pullFamily(rel_graph, moves_inds2[ii])
                                 for s2 in sib2:
                                     if s2 < s1:
                                         refined = all_rel[s2][s1][3]
+                                        this_pair = s2 + "$" + s1
                                     else:
                                         refined = all_rel[s1][s2][3]
-                                    if not [s1,s2] in checked:
+                                        this_pair = s1 + "$" + s2
+                                    if not this_pair in checked:
                                         results.append([s1,s2,total,refined, 'graph+inferred'])
-                                        addToChecked(s1,s2,checked)
+                                        checked.add(this_pair)
                                 sib2.add(moves_inds2[ii])
                                 hs2 = checkUseHalfsibs(sib2, halfsib2_sets, ind1, all_rel)
                                 for h2 in hs2:
                                     if h2 < s1:
                                         refined = all_rel[h2][s1][3]
+                                        this_pair = h2 + "$" + s1
                                     else:
                                         refined = all_rel[s1][h2][3]
-                                    if not [s1,h2] in checked:
+                                        this_pair = s1 + "$" + h2
+                                    if this_pair in checked:
                                         results.append([s1,h2,total,refined,'graph+inferred'])
-                                        addToChecked(s1,h2,checked)
+                                        checked.add(this_pair)
                                 for p in pc2:
                                     if not p in moves_inds2 and not p == ind2: #if we didn't travel through this relationship already
                                         if p < s1:
                                             refined = all_rel[p][s1][3]
+                                            this_pair = p + "$" + s1
                                         else:
                                             refined = all_rel[s1][p][3]
-                                        if not [s1,p] in checked:
+                                            this_pair = s1 + "$" + p
+                                        if not this_pair in checked:
                                             if total > 0:
                                                 results.append([s1, p, total+1, refined, 'graph+inferred'])
                                             else:
                                                 results.append([s1, p, total, refined, 'graph+inferred'])
-                                            addToChecked(s1,p,checked)
+                                            checked.add(this_pair)
 
                         if len(moves1) and len(moves2):
                             total = int(closest_result[2])
@@ -1720,11 +1688,13 @@ def runDRUID(rel_graph, all_rel, inds, all_segs, args):
                                             total = total + 2
                                     if moves_inds1[i1] < moves_inds2[i2]:
                                         refined = all_rel[moves_inds1[i1]][moves_inds2[i2]][3]
+                                        this_pair = moves_inds1[i1] + "$" + moves_inds2[i2]
                                     else:
                                         refined = all_rel[moves_inds2[i2]][moves_inds1[i1]][3]
-                                    if not [moves_inds1[i1],moves_inds2[i2]] in checked:
+                                        this_pair = moves_inds2[i2] + "$" + moves_inds1[i1]
+                                    if not this_pair in checked:
                                         results.append([moves_inds1[i1],moves_inds2[i2],total,refined, 'graph+inferred'])
-                                        addToChecked(moves_inds1[i1],moves_inds2[i2],checked)
+                                        checked.add(this_pair)
 
                                     # check for close relatives of moves_inds[ii]
                                     [sib1, avunc1_bothsides, nn1, par1, child1, pc1, gp1, gc1, halfsib1_sets, twins1] = pullFamily(rel_graph, moves_inds1[i1])
@@ -1732,27 +1702,33 @@ def runDRUID(rel_graph, all_rel, inds, all_segs, args):
                                     for s1 in sib1:
                                         if s1 < moves_inds2[i2]:
                                             refined = all_rel[s1][moves_inds2[i2]][3]
+                                            this_pair = s1 + "$" + moves_inds2[i2]
                                         else:
                                             refined = all_rel[moves_inds2[i2]][s1][3]
-                                        if not [s1,moves_inds2[i2]] in checked:
+                                            this_pair = moves_inds2[i2] + "$" + s1
+                                        if not this_pair in checked:
                                             results.append([s1, moves_inds2[i2], total, refined, 'graph+inferred'])
-                                            addToChecked(s1,moves_inds2[i2],checked)
+                                            checked.add(this_pair)
                                     for s2 in sib2:
                                         if s2 < moves_inds1[i1]:
                                             refined = all_rel[s2][moves_inds1[i1]][3]
+                                            this_pair = s2 + "$" + moves_inds1[i1]
                                         else:
                                             refined = all_rel[moves_inds1[i1]][s2][3]
-                                        if not [moves_inds1[i1],s2] in checked:
+                                            this_pair = moves_inds1[i1] + "$" + s2
+                                        if not this_pair in checked:
                                             results.append([moves_inds1[i1], s2, total, refined, 'graph+inferred'])
-                                            addToChecked(moves_inds1[i1],s2,checked)
+                                            checked.add(this_pair)
                                         for s1 in sib1:
                                             if s1 < s2:
                                                 refined = all_rel[s1][s2][3]
+                                                this_pair = s1 + "$" + s2
                                             else:
                                                 refined = all_rel[s2][s1][3]
-                                            if not [s1,s2] in checked:
+                                                this_pair = s2 + "$" + s1
+                                            if not this_pair in checked:
                                                 results.append([s1, s2, total, refined, 'graph+inferred'])
-                                                addToChecked(s1,s2,checked)
+                                                checked.add(this_pair)
                                     sib1 = list(sib1)
                                     sib2 = list(sib2)
                                     sib1.append(moves_inds1[i1])
@@ -1760,17 +1736,23 @@ def runDRUID(rel_graph, all_rel, inds, all_segs, args):
                                     hs1 = checkUseHalfsibs(sib1, halfsib1_sets, ind2, all_rel)
                                     hs2 = checkUseHalfsibs(sib2, halfsib2_sets, ind1, all_rel)
                                     for h1 in hs1:
-                                        if not [h1,ind2] in checked:
+                                        if h1 < ind2: this_pair = h1 + "$" + ind2
+                                        else:         this_pair = ind2 + "$" + h1
+                                        if not this_pair in checked:
                                             results.append([h1, ind2, total, refined, 'graph+inferred'])
-                                            addToChecked(h1,ind2,checked)
+                                            checked.add(this_pair)
                                     for h2 in hs2:
-                                        if not [ind1,h2] in checked:
+                                        if h2 < ind1: this_pair = h2 + "$" + ind1
+                                        else:         this_pair = ind1 + "$" + h2
+                                        if not this_pair in checked:
                                             results.append([ind1, h2, total, refined, 'graph+inferred'])
-                                            addToChecked(ind1,h2,checked)
+                                            checked.add(this_pair)
                                         for h1 in hs1:
-                                            if not [h1,h2] in checked:
+                                            if h1 < h2: this_pair = h1 + "$" + h2
+                                            else:       this_pair = h2 + "$" + h1
+                                            if not this_pair in checked:
                                                 results.append([h1,h2,total,refined, 'graph+inferred'])
-                                                addToChecked(h1,h2,checked)
+                                                checked.add(this_pair)
 
 
                 if len(twins1):
@@ -1778,22 +1760,30 @@ def runDRUID(rel_graph, all_rel, inds, all_segs, args):
                         if sibs1[0] == res[0]:
                             for t1 in twins1:
                                 results.append([t1,res[1],res[2],res[3],'graph'])
-                                addToChecked(t1,res[1],checked)
+                                if t1 < res[1]: this_pair = t1 + "$" + res[1]
+                                else:           this_pair = res[1] + "$" + t1
+                                checked.add(this_pair)
                         elif sibs1[0] == res[1]:
                             for t1 in twins1:
                                 results.append([res[0],t1,res[2],res[3],'graph'])
-                                addToChecked(res[0],t1,checked)
+                                if t1 < res[0]: this_pair = t1 + "$" + res[0]
+                                else:           this_pair = res[0] + "$" + t1
+                                checked.add(this_pair)
 
                 if len(twins2):
                     for res in results:
                         if sibs2[0] == res[0]:
                             for t2 in twins2:
                                 results.append([t2, res[1], res[2], res[3],'graph'])
-                                addToChecked(t2.res[1],checked)
+                                if t2 < res[1]: this_pair = t2 + "$" + res[1]
+                                else:           this_pair = res[1] + "$" + t2
+                                checked.add(this_pair)
                         elif sibs2[0] == res[1]:
                             for t2 in twins2:
                                 results.append([res[0], t2, res[2], res[3],'graph'])
-                                addToChecked(res[0],t2,checked)
+                                if t2 < res[0]: this_pair = t2 + "$" + res[0]
+                                else:           this_pair = res[0] + "$" + t2
+                                checked.add(this_pair)
 
             all_results = all_results + results
 

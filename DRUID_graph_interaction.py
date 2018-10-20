@@ -1,11 +1,4 @@
-import subprocess
-import sys
-import Bio
-import itertools
 import networkx as nx
-import random
-import copy
-import numpy as np
 
 def checkChangeLineage(tmp_graph,path):
     if len(path) > 2:
