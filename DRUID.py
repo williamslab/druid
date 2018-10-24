@@ -5,8 +5,12 @@ from DRUID_functions import *
 from DRUID_graph_interaction import *
 import argparse
 
-version='v1.02'
-update='20 Oct 2018'
+version='v1.02.1'
+update='23 Oct 2018'
+
+#import cProfile, pstats
+#pr = cProfile.Profile()
+#pr.enable()
 
 
 parser=argparse.ArgumentParser(
@@ -93,4 +97,6 @@ for res in all_results:
 
 outfile_results.close()
 
-
+#pr.disable()
+#ps = pstats.Stats(pr).sort_stats('cumulative')
+#ps.print_stats()

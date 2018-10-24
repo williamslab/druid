@@ -1365,7 +1365,7 @@ def runDRUID(rel_graph, all_rel, inds, all_segs, args):
                 type = rel_graph.get_edge_data(ind1, ind2)['type']
                 if type == '1U':
                     type = '1'
-                results = results + [[ind1, ind2, type, refined, 'graph']]
+                results.append([ind1, ind2, type, refined, 'graph'])
             else:
                 hs1 = checkUseHalfsibs(sib1, halfsib1_sets, ind2, all_rel)
                 hs2 = checkUseHalfsibs(sib2, halfsib2_sets, ind1, all_rel)
@@ -1377,7 +1377,7 @@ def runDRUID(rel_graph, all_rel, inds, all_segs, args):
                         refined = all_rel[ind1][ind2][3]
                     else:
                         refined = all_rel[ind2][ind1][3]
-                    results = results + [[ind1,ind2,reltype,refined, 'graph']]
+                    results.append([ind1,ind2,reltype,refined, 'graph'])
                 else: #no path between individuals
                     #check if ind1 has parents/grandparents more closely related to other set of individuals
                     ind1_original = ind1
@@ -1508,8 +1508,10 @@ def runDRUID(rel_graph, all_rel, inds, all_segs, args):
                                             for item in results_to_add:
                                                 if item[0] < item[1]: this_pair = item[0] + "$" + item[1]
                                                 else:                 this_pair = item[1] + "$" + item[0]
-                                                checked.add(this_pair)
-                                            results = results + results_to_add
+                                                if not this_pair in checked:
+                                                    checked.add(this_pair)
+                                                    item.append('inferred')
+                                                    results.append(item)
                                 if len(unused2):
                                     unused_check = set()
                                     for i2 in unused2:
@@ -1521,8 +1523,10 @@ def runDRUID(rel_graph, all_rel, inds, all_segs, args):
                                             for item in results_to_add:
                                                 if item[0] < item[1]: this_pair = item[0] + "$" + item[1]
                                                 else:                 this_pair = item[1] + "$" + item[0]
-                                                checked.add(this_pair)
-                                            results = results + results_to_add
+                                                if not this_pair in checked:
+                                                    checked.add(this_pair)
+                                                    item.append('inferred')
+                                                    results.append(item)
 
                         else:
                             relavunc1 = []
@@ -1785,6 +1789,6 @@ def runDRUID(rel_graph, all_rel, inds, all_segs, args):
                                 else:           this_pair = res[0] + "$" + t2
                                 checked.add(this_pair)
 
-            all_results = all_results + results
+            all_results += results
 
     return all_results

@@ -1,8 +1,8 @@
 # DRUID
 DRUID: deep relatedness inference utilizing identity by descent
 
-Updated 20 Oct 2018
-Version 1.02
+Updated 23 Oct 2018
+Version 1.02.1
 
 If Refined IBD results differ by DRUID results by 3 or more degrees, you are likely seeing a bug in DRUID or you are dealing with an inbred pedigree.  
 If the former, please report; if the latter, it may be beneficial to run DRUID on only select individuals.
