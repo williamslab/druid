@@ -1480,6 +1480,7 @@ def runDRUID(rel_graph, all_rel, inds, all_segs, args):
                                     sib1.add(ind1)
                                     [relavunc1, relavunc2, unused1, unused2] = checkRelevantAuntsUncles(sib1, sib2, avunc1_bothsides, avunc2_bothsides, par1, par2)
                                     if not old_ind1 in relavunc1:
+                                        relavunc1 = []
                                         relavunc1.append(old_ind1)
                                         checkAndRemove(old_ind1,unused1)
                                 if not len(relavunc2) and len(nn2):
@@ -1494,6 +1495,7 @@ def runDRUID(rel_graph, all_rel, inds, all_segs, args):
                                     sib2.add(ind2)
                                     [relavunc1, relavunc2, unused1, unused2] = checkRelevantAuntsUncles(sib1, sib2, avunc1_bothsides, avunc2_bothsides, par1, par2)
                                     if not old_ind2 in relavunc2:
+                                        relavunc2 = []
                                         relavunc2.append(old_ind2)
                                         checkAndRemove(old_ind2, unused2)
 
