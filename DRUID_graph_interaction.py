@@ -443,8 +443,7 @@ def pullFamily(tmp_graph,ind):
             elif edge_info == 'C':
                 parents.add(edge[1])
             elif edge_info == 'FS':
-                if not edge[1] in sib:
-                    sib.add(edge[1])
+                sib.add(edge[1])
             elif edge_info == 'NN':
                 avunc.add(edge[1])
             elif edge_info == 'GC':
@@ -457,7 +456,7 @@ def pullFamily(tmp_graph,ind):
                 twins.add(edge[1])
             elif edge_info == 'PC':
                 pc.add(edge[1])
-            elif edge_info == 'GC':
+            elif edge_info == 'GP':
                 grandchildren.add(edge[1])
     avunc_sets = []
     checked = set()
