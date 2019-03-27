@@ -1,4 +1,6 @@
 import networkx as nx
+from DRUID_functions import *
+from DRUID_all_rel import *
 
 def checkChangeLineage(tmp_graph,path):
     if len(path) > 2:
@@ -122,32 +124,22 @@ def checkIfParentInGraph(tmp_graph,ind1,ind2):
         return 0
 
 
-def checkIfParent(tmp_graph,all_rel,sibset,ind, C):
+def checkIfParent(tmp_graph, all_rel, sibset, ind, C):
     #determine if ind is the parent of sibset
     if len(sibset) == 1:
         if C: #DRUID_C
             return 0
         else:
             sib = list(sibset)[0]
-            if sib < ind:
-                if all_rel[sib][ind][1] < 0.05: #very little IBD2
-                    return 1 #return 1 to give generic PC categorization to pair later
-                else:
-                    return 0
+            if getIBD2(sib, ind, all_rel) < 0.05: #very little IBD2
+                return 1 #return 1 to give generic PC categorization to pair later
             else:
-                if all_rel[ind][sib][1] < 0.05:
-                    return 1
-                else:
-                    return 0
+                return 0
     else:
         par = 1
         for sib in sibset:
-            if sib < ind:
-                if not (sib,ind) in tmp_graph.edges(sib) or not tmp_graph.get_edge_data(sib,ind)['type'] == '1U' or not float(all_rel[sib][ind][1]) < 1/2.0**(7/2.0):
-                    return 0
-            else:
-                if not (sib,ind) in tmp_graph.edges(sib) or not tmp_graph.get_edge_data(sib,ind)['type'] == '1U' or not float(all_rel[ind][sib][1]) < 1/2.0**(7/2.0):
-                    return 0
+            if not (sib,ind) in tmp_graph.edges(sib) or not tmp_graph.get_edge_data(sib,ind)['type'] == '1U' or not float(getIBD2(sib, ind, all_rel)) < 1/2.0**(7/2.0):
+                return 0
 
     return par
 
@@ -318,20 +310,14 @@ def checkForMoveUp(all_rel, ind, sibset, older_gen, possible_par, third_party):
             all_sib = set()
             for sib in sibset:
                 for tp in third_party:
-                    if sib < tp:
-                        all_sib.add(all_rel[sib][tp][2])
-                    else:
-                        all_sib.add(all_rel[tp][sib][2])
+                    all_sib.add( getPairwiseK(sib, tp, all_rel) )
             maxsib = max(all_sib)
 
             maxpar = []
             for par in older_gen:
                 all_par = set()
                 for tp in third_party:
-                    if par < tp:
-                        all_par.add(all_rel[par][tp][2])
-                    else:
-                        all_par.add(all_rel[tp][par][2])
+                    all_par.add( getPairwiseK(par, tp, all_rel) )
                 maxpar.append(max(all_par))
 
         par_use = list(older_gen)[maxpar.index(max(maxpar))]
@@ -353,18 +339,11 @@ def checkForMoveUp(all_rel, ind, sibset, older_gen, possible_par, third_party):
                 indK = [] # kinship coefficients between current individual and third party
 
                 for tp in third_party:
-                    if tp < pc:
-                        pcD.append(all_rel[tp][pc][3])
-                        pcK.append(all_rel[tp][pc][2])
-                    else:
-                        pcD.append(all_rel[pc][tp][3])
-                        pcK.append(all_rel[pc][tp][2])
-                    if tp < ind:
-                        indD.append(all_rel[tp][ind][3])
-                        indK.append(all_rel[tp][ind][2])
-                    else:
-                        indD.append(all_rel[ind][tp][3])
-                        indK.append(all_rel[ind][tp][2])
+                    pcD.append( getPairwiseD(tp, pc, all_rel) )
+                    pcK.append( getPairwiseK(tp, pc, all_rel) )
+
+                    indD.append( getPairwiseD(tp, ind, all_rel) )
+                    indK.append( getPairwiseK(tp, ind, all_rel) )
 
                 if all(x != 0 for x in pcD):
                     if all([(thresholdK(pcD[x]) * pcK[x] > indK[x] and pcK[x] / (indK[x] + 1e-6) < 20) for x in range(0,len(pcD))]):
