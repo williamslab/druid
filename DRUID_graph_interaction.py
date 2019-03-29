@@ -302,63 +302,66 @@ def thresholdK(pcD):
 
 
 def checkForMoveUp(all_rel, ind, sibset, older_gen, possible_par, third_party):
-    # check if parent/grandparent is in dataset and is more related to third_party
+    # check if parent/grandparent is more related to third_party
     if len(older_gen):
-        if anyIn(older_gen, third_party):
+        if len(older_gen.intersection(third_party)):
             return 'same'
-        else:
-            all_sib = set()
-            for sib in sibset:
-                for tp in third_party:
-                    all_sib.add( getPairwiseK(sib, tp, all_rel) )
-            maxsib = max(all_sib)
 
-            maxpar = []
-            for par in older_gen:
-                all_par = set()
-                for tp in third_party:
-                    all_par.add( getPairwiseK(par, tp, all_rel) )
-                maxpar.append(max(all_par))
+        maxsibK = -1 # impossible value will be updated
+        for sib in sibset:
+            for tp in third_party:
+                maxsibK = max(maxsibK, getPairwiseK(sib, tp, all_rel) )
 
-        par_use = list(older_gen)[maxpar.index(max(maxpar))]
+        maxparK = -1
+        the_max_par = -1
+        for par in older_gen:
+            for tp in third_party:
+                parK = getPairwiseK(par, tp, all_rel)
+                if parK > maxparK:
+                    maxparK = parK
+                    the_max_par = par
 
-        if max(maxpar) > maxsib:  # there's a parent/grandparent more closely related
-            return par_use
+        if maxparK > maxsibK:
+            # there's a parent/grandparent more closely related
+            return the_max_par
 
     if len(possible_par):
-        if anyIn(possible_par, third_party):
+        if len(possible_par.intersection(third_party)):
             return 'same'
-        else:
-            # check if any possible parents are more closely related
-            pc_possible_return = []
-            pc_possible_return_K = []
-            for pc in possible_par:
-                pcD = [] #degrees of relatedness between PC and third party
-                pcK = [] # kinship coefficients between PC and third party
-                indD = [] #degrees of relatedness between current individual and third party
-                indK = [] # kinship coefficients between current individual and third party
 
-                for tp in third_party:
-                    pcD.append( getPairwiseD(tp, pc, all_rel) )
-                    pcK.append( getPairwiseK(tp, pc, all_rel) )
+        # check if any possible parents are more closely related
+        max_pc_K = -1
+        the_max_pc = -1
+        found_max = False
+        for pc in possible_par:
+            should_consider_pc = True
+            cur_max_pc_K = -1
+            for tp in third_party:
+                pcD = getPairwiseD(tp, pc, all_rel)
+                pcK = getPairwiseK(tp, pc, all_rel)
+                indK =  getPairwiseK(tp, ind, all_rel)
 
-                    indD.append( getPairwiseD(tp, ind, all_rel) )
-                    indK.append( getPairwiseK(tp, ind, all_rel) )
+                if pcD == 0 or (thresholdK(pcD) * pcK <= indK or pcK / (indK + 1e-6) >= 20):
+                    # Ensure that for each third party individual, pc's K is
+                    # sufficiently larger than current individual's K.
+                    # Because this person could be a child of ind, who is
+                    # potentially related to tp through a different lineage,
+                    # we impose an upper bound on the ratio of relatedness
+                    # between pcK and indK: it must be < 20x higher
+                    # (expectation is 2x)
+                    should_consider_pc = False
+                    break
+                elif pcK > cur_max_pc_K:
+                    cur_max_pc_K = pcK
 
-                if all(x != 0 for x in pcD):
-                    if all([(thresholdK(pcD[x]) * pcK[x] > indK[x] and pcK[x] / (indK[x] + 1e-6) < 20) for x in range(0,len(pcD))]):
-                        # for each third party individual, pc's K is sufficiently larger than current individual's K
-                        # because this person could be a child of ind, who is potentially related to tp through a
-                        # different lineage, we impose an upper bound on the ratio of relatedness between pcK and indK:
-                        # it must be < 20x higher (expectation is 2x)
-                        pc_possible_return.append(pc)
-                        pc_possible_return_K.append(max(pcK))
+            if should_consider_pc and cur_max_pc_K > max_pc_K:
+                max_pc_K = cur_max_pc_K
+                the_max_pc = pc
+                found_max = True
 
 
-            if len(pc_possible_return) == 1:
-                return pc_possible_return[0]
-            elif len(pc_possible_return):
-                return pc_possible_return[pc_possible_return_K.index(max(pc_possible_return_K))]  # use PC with largest K
+        if found_max:
+            return the_max_pc # use PC with largest K
 
     return ind
 

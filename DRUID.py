@@ -5,8 +5,8 @@ from DRUID_functions import *
 from DRUID_graph_interaction import *
 import argparse
 
-version='v1.02.2'
-update='26 Mar 2019'
+version='v1.02.3'
+update='28 Mar 2019'
 
 #import cProfile, pstats
 #pr = cProfile.Profile()
@@ -71,31 +71,21 @@ all_segs = readSegments(args.s[0])
 # infer second degree & aunts/uncles of sibling sets
 print("\nInferring second degree relatives")
 inferSecondPath(rel_graph, rel_graph_tmp, all_rel, second, all_segs, args.o[0], int(args.C[0]))
-print('\n')
 
-all_results = runDRUID(rel_graph, all_rel, inds, all_segs, args)
+outfile_results = open(args.o[0]+'.DRUID','w')
+outfile_results.write("ind1\tind2\tDRUID\tRefinedIBD\tMethod\n")
+
+print("\n\nRunning main DRUID inference")
+runDRUID(rel_graph, all_rel, inds, all_segs, args, outfile_results)
+
+outfile_results.close()
+
 
 if args.F[0] == 1:
     print("\nPrinting .fam files")
     fillInGraph(rel_graph)
 
-
-print("\nPrinting DRUID results")
-outfile_results = open(args.o[0]+'.DRUID','w')
-outfile_results.write("ind1\tind2\tDRUID\tRefinedIBD\tMethod\n")
-for res in all_results:
-    if res[2] == '1U':
-        res[2] = '1'
-    elif res[2] in ['-1',-1]:
-        res[2] = 'MZ'
-        res[3] = 'MZ'
-    elif res[2] == '0':
-        res[2] = 'UN'
-        res[3] = 'UN'
-    outfile_results.write("\t".join(map(str,res))+'\n')
-
-
-outfile_results.close()
+print("\ndone")
 
 #pr.disable()
 #ps = pstats.Stats(pr).sort_stats('cumulative')

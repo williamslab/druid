@@ -732,13 +732,10 @@ def combineBothGPsKeepProportionOnlyExpectation(sib1, avunc1, pc1, sib2, avunc2,
 # perform ancestral genome reconstruction between two groups of related individuals (sib1+avunc1 and sib2+avunc2)
 # infers relatedness between all individuals within the two groups
     if len(sib1) == 1 and len(sib2) == 1 and len(avunc1) == 0 and len(avunc2) == 0:
-        i1 = list(sib1)[0]
-        i2 = list(sib2)[0]
+        i1 = next(iter(sib1))
+        i2 = next(iter(sib2))
         degree = getPairwiseD(i1, i2, all_rel)
-        if i1 < i2:
-            return [[i1,i2, degree, degree]]
-        else:
-            return [[i2,i1, degree, degree]]
+        return [[i1,i2, degree, degree]]
 
     cont = 1
     for av1 in avunc1:
@@ -1095,20 +1092,6 @@ def getAllRel(results_file, inds_file):
 
     file.close()
 
-
-    for [ind1,ind2] in itertools.combinations(inds, 2):
-        if ind1 < ind2:
-            if not ind1 in all_rel.keys():
-                all_rel[ind1] = {}
-            if not ind2 in all_rel[ind1].keys():
-                all_rel[ind1][ind2] = [0,0,0,0]
-        else:
-            if not ind2 in all_rel.keys():
-                all_rel[ind2] = {}
-            if not ind1 in all_rel[ind2].keys():
-                all_rel[ind2][ind1] = [0,0,0,0]
-
-
     return [all_rel,inds,first,second,third]
 
 
@@ -1273,368 +1256,411 @@ def checkAndRemove(x,setOrList):
     if x in setOrList:
         setOrList.remove(x)
 
-def runDRUID(rel_graph, all_rel, inds, all_segs, args):
-    # a chunky monkey
-    all_results = []
+def printResult(res, outfile):
+    if res[2] == '1U':
+        res[2] = '1'
+    elif res[2] in ['-1',-1]:
+        res[2] = 'MZ'
+        res[3] = 'MZ'
+    elif res[2] == '0':
+        res[2] = 'UN'
+        res[3] = 'UN'
+    outfile.write("\t".join(map(str,res))+'\n')
+
+def runDRUID(rel_graph, all_rel, inds, all_segs, args, outfile):
     checked = set()
     for [ind1,ind2] in itertools.combinations(inds,2): #test each pair of individuals
         pair_name = getPairName(ind1, ind2)
-        if not pair_name in checked: #if pair not yet tested
-            #print("Comparing "+ind1+" and "+ind2)
-            results = []
+        if pair_name in checked:
+            continue  #already done
+
+        #print("Comparing "+ind1+" and "+ind2)
+
+        [sib1, avunc1_bothsides, nn1, par1, child1, pc1, gp1, gc1, halfsib1_sets, twins1] = pullFamily(rel_graph, ind1)
+        [sib2, avunc2_bothsides, nn2, par2, child2, pc2, gp2, gc2, halfsib2_sets, twins2] = pullFamily(rel_graph, ind2)
+        sib1.add(ind1)
+        sib2.add(ind2)
+
+        # FIRST TWO CASES: pair connected via graph -- output the relationship
+        if rel_graph.has_edge(ind1, ind2) and (rel_graph.get_edge_data(ind1,ind2)['type'] in ['FS','PC'] or ((len(sib1) > 1 and checkSibs(sib1,ind2, all_rel)) or len(sib1) == 1) and ((len(sib2) > 1 and checkSibs(sib2,ind1, all_rel)) or len(sib2) == 1)):
+            # first degree edge:
+            checked.add(pair_name)
+            refined = getPairwiseD(ind1, ind2, all_rel)
+            type = rel_graph.get_edge_data(ind1, ind2)['type']
+            if type == '1U':
+                type = '1'
+            printResult([ind1, ind2, type, refined, 'graph1'], outfile)
+            continue
+
+        reltype = getRelationship(rel_graph, ind1, ind2)
+        if reltype != -1:   # path between the two:
+            refined = getPairwiseD(ind1, ind2, all_rel)
+            printResult([ind1,ind2,reltype,refined, 'graph2'], outfile)
+            continue
+
+        # NO PATH BETWEEN THE INDIVIDUALS: use DRUID approach
+
+        hs1 = checkUseHalfsibs(sib1, halfsib1_sets, ind2, all_rel)
+        hs2 = checkUseHalfsibs(sib2, halfsib2_sets, ind1, all_rel)
+        sib1 = sib1.union(set(hs1))
+        sib2 = sib2.union(set(hs2))
+
+        # STEP 1: move to parents/grandparents of ind1 that are more closely
+        #         related to sib2
+
+        ind1_original = ind1
+        ind1_new = checkForMoveUp(all_rel, ind1, sib1, par1.union(gp1), pc1, sib2)
+        # same as ind2: shouldn't happen
+        assert ind1_new != 'same', "ERROR: pair that is closely related not in same graph"
+        moves1 = []
+        moves_inds1 = []
+        while ind1 != ind1_new and ind1_new != 'same':
+            moves1.append( getRelationship(rel_graph,ind1_new, ind1) )
+            moves_inds1.append(ind1)
+            ind1 = ind1_new
             [sib1, avunc1_bothsides, nn1, par1, child1, pc1, gp1, gc1, halfsib1_sets, twins1] = pullFamily(rel_graph, ind1)
-            [sib2, avunc2_bothsides, nn2, par2, child2, pc2, gp2, gc2, halfsib2_sets, twins2] = pullFamily(rel_graph, ind2)
             sib1.add(ind1)
-            sib2.add(ind2)
-            if rel_graph.has_edge(ind1, ind2) and (rel_graph.get_edge_data(ind1,ind2)['type'] in ['FS','PC'] or ((len(sib1) > 1 and checkSibs(sib1,ind2, all_rel)) or len(sib1) == 1) and ((len(sib2) > 1 and checkSibs(sib2,ind1, all_rel)) or len(sib2) == 1)):
-                #if the pair is already connected via graph, output that relationship
-                checked.add(pair_name)
-                refined = getPairwiseD(ind1, ind2, all_rel)
-                type = rel_graph.get_edge_data(ind1, ind2)['type']
-                if type == '1U':
-                    type = '1'
-                results.append([ind1, ind2, type, refined, 'graph1'])
+            ind1_new = checkForMoveUp(all_rel, ind1, sib1, gp1.union(par1), pc1, sib2)
+
+        if ind1_new == 'same': # ind1_new in sib2
+            overlap = gp1.union(par1).intersect(sib2)
+            assert ind2 not in overlap, "ERROR: apparent path between individuals not in same graph"
+            if len(overlap):
+                ind1 = next(iter(overlap)) # any of the siblings will do
             else:
+                overlap = pc1.intersect(sib2)
+                assert ind2 not in overlap, "ERROR: apparent path between individuals not in same graph"
+                ind1 = next(iter(overlap)) # any of the siblings will do
+            [sib1, avunc1_bothsides, nn1, par1, child1, pc1, gp1, gc1, halfsib1_sets, twins1] = pullFamily(rel_graph, ind1)
+
+        # STEP 2: move to parents/grandparents of ind2 that are more closely
+        #         related to sib1
+        else:
+            ind2_original = ind2
+            ind2_new = checkForMoveUp(all_rel, ind2,sib2,gp2.union(par2), pc2, sib1)
+            moves2 = []
+            moves_inds2 = []
+            if ind2_new == 'same':
+                moves2.append(getRelationship(rel_graph, ind2_new, ind2))
+                moves_inds2.append(ind2)
+            while ind2 != ind2_new and ind2_new != 'same':
+                moves2.append(getRelationship(rel_graph, ind2_new, ind2))
+                moves_inds2.append(ind2)
+                ind2 = ind2_new
+                [sib2, avunc2_bothsides, nn2, par2, child2, pc2, gp2, gc2, halfsib2_sets, twins2] = pullFamily(rel_graph, ind2)
+                sib2.add(ind2)
+                ind2_new = checkForMoveUp(all_rel, ind2, sib2, gp2.union(par2), pc2, sib1)
+
+            if ind2_new == 'same':
+                overlap = gp2.union(par2).intersect(sib1)
+                assert ind1 not in overlap, "ERROR: apparent path between individuals not in same graph"
+                if len(overlap):
+                    ind2 = next(iter(overlap)) # any of the siblings will do
+                else:
+                    overlap = pc2.intersect(sib1)
+                    assert ind1 not in overlap, "ERROR: apparent path between individuals not in same graph"
+                    ind2 = next(iter(overlap)) # any of the siblings will do
+                [sib2, avunc2_bothsides, nn2, par2, child2, pc2, gp2, gc2, halfsib2_sets, twins2] = pullFamily(rel_graph, ind2)
+
+        # NOW DEAL WITH FIRST CASE: the moved-to ind1/ind2 are siblings.
+        # Trivial case
+
+        if ind1_new == 'same' or ind2_new == 'same':
+            assert ind1 != ind2, "ERROR: apparent path between individuals not in same graph"
+            closest_result = [ind1,ind2,1] # siblings
+            total = int(closest_result[2])
+
+        # DO MAIN DRUID INFERENCE using the current ind1 and ind2
+        else:
+            # ANY AUNT/UNCLE SETS?
+            # Switch focus to youngest generation if available
+            if len(avunc1_bothsides) or len(avunc2_bothsides):
+                [relavunc1, relavunc2, unused1, unused2] = checkRelevantAuntsUncles(sib1, sib2, avunc1_bothsides, avunc2_bothsides, par1, par2, all_rel)
+                # if relavunc1 == 'av':
+                #     for s1 in sib1:
+                #         for s2 in sib2:
+                #             refined = getPairwiseD(s1, s2, all_rel)
+                #             printResult([s1,s2,'A',refined,"graph"], outfile)
+                #     closest_result = [ind1,ind2,2,refined,"graph"] #refined may not be true Refined IBD inference for exact pair, but doesn't matter
+                # elif relavunc2 == 'av':
+                #     for s1 in sib1:
+                #         for s2 in sib2:
+                #             refined = getPairwiseD(s1, s2, all_rel)
+                #             printResult([s2,s1,'A',refined,"graph"], outfile)
+                #     closest_result = [ind1,ind2,2,refined,'graph']
+                # elif relavunc1 == 'sibparent':
+                #     results_tmp = []
+                #     for s1 in sib1:
+                #         for s2 in sib2:
+                #             refined = getPairwiseD(s1, s2, all_rel)
+                #             results_tmp.append([s1,s2,''])
+                #
+                # elif relavunc2 == 'sibparent':
+                #
+                # else:
+                if relavunc1 != 'av':
+                    if not len(relavunc1) and len(nn1):
+                        # tmp = sib1[:]
+                        # sib1 = nn1[:]
+                        # avunc1_bothsides = [tmp[:]]
+                        # nn1 = []  # doesn't matter
+                        old_ind1 = ind1
+                        sib1 = getLargestSibsets(rel_graph, nn1)
+                        ind1 = list(sib1)[0]
+                        [sib1, avunc1_bothsides, nn1, par1, child1, pc1, gp1, gc1, halfsib1_sets, twins1] = pullFamily(rel_graph, ind1)
+                        sib1.add(ind1)
+                        [relavunc1, relavunc2, unused1, unused2] = checkRelevantAuntsUncles(sib1, sib2, avunc1_bothsides, avunc2_bothsides, par1, par2, all_rel)
+                        if relavunc1 != 'av' and not old_ind1 in relavunc1:
+                            relavunc1.add(old_ind1)
+                            checkAndRemove(old_ind1,unused1)
+                    if not len(relavunc2) and len(nn2):
+                        # tmp = sib2[:]
+                        # sib2 = nn2[:]
+                        # avunc2_bothsides = [tmp[:]]
+                        # nn2 = []  # doesn't matter
+                        old_ind2 = ind2
+                        sib2 = getLargestSibsets(rel_graph,nn2)
+                        ind2 = list(sib2)[0]
+                        [sib2, avunc2_bothsides, nn2, par2, child2, pc2, gp2, gc2, halfsib2_sets, twins2] = pullFamily(rel_graph, ind2)
+                        sib2.add(ind2)
+                        [relavunc1, relavunc2, unused1, unused2] = checkRelevantAuntsUncles(sib1, sib2, avunc1_bothsides, avunc2_bothsides, par1, par2, all_rel)
+                        if relavunc2 != 'av' and not old_ind2 in relavunc2:
+                            relavunc2.add(old_ind2)
+                            checkAndRemove(old_ind2, unused2)
+
+                    if len(unused1):
+                        unused_check = set()
+                        for i1 in unused1:
+                            if not i1 in unused_check:
+                                [sib1u, avunc1u_bothsides, nn1u, par1u, child1u, pc1u, gp1u, gc1u, halfsib1u_sets, twins1u] = pullFamily(rel_graph, i1)
+                                sib1u.add(i1)
+                                unused_check = unused_check.union(sib1u)
+                                results_to_add = combineBothGPsKeepProportionOnlyExpectation(sib1u, [], pc1, sib2, [], pc2, all_rel, all_segs, args.i[0], rel_graph)
+                                for item in results_to_add:
+                                    item.append('inferred1')
+                                    this_pair = getPairName(item[0], item[1])
+                                    if not this_pair in checked:
+                                        printResult(item, outfile)
+                                        checked.add(this_pair)
+                                    # handle twins of i1:
+                                    if len(twins1u):
+                                        for idx in range(2):
+                                            if i1 == item[idx]:
+                                                for t1 in twins1u:
+                                                    this_pair = getPairName(t1, item[1 - idx])
+                                                    if not this_pair in checked:
+                                                        printResult([t1, item[1 - idx], item[2], item[3], item[4]], outfile)
+                                                        checked.add(this_pair)
+
+                    if len(unused2):
+                        unused_check = set()
+                        for i2 in unused2:
+                            if not i2 in unused_check:
+                                [sib2u, avunc2u_bothsides, nn2u, par2u, child2u, pc2u, gp2u, gc2u, halfsib2u_sets, twins2u] = pullFamily(rel_graph, i2)
+                                sib2u.add(ind2)
+                                unused_check = unused_check.union(sib2u)
+                                results_to_add = combineBothGPsKeepProportionOnlyExpectation(sib1, [], pc1, sib2u, [], pc2, all_rel, all_segs, args.i[0], rel_graph)
+                                for item in results_to_add:
+                                    item.append('inferred2')
+                                    this_pair = getPairName(item[0], item[1])
+                                    if not this_pair in checked:
+                                        printResult(item, outfile)
+                                        checked.add(this_pair)
+                                    # handle twins of i2:
+                                    if len(twins2u):
+                                        for idx in range(2):
+                                            if i2 == item[idx]:
+                                                for t2 in twins2u:
+                                                    this_pair = getPairName(t2, item[1 - idx])
+                                                    if not this_pair in checked:
+                                                        printResult([t2, item[1 - idx], item[2], item[3], item[4]], outfile)
+                                                        checked.add(this_pair)
+
+            # NO AUNT/UNCLE SETS
+            else:
+                relavunc1 = []
+                relavunc2 = []
+
+            if relavunc1 != 'av' and relavunc2 != 'av':
+                results_tmp = combineBothGPsKeepProportionOnlyExpectation(sib1, relavunc1, pc1, sib2, relavunc2, pc2, all_rel, all_segs, args.i[0], rel_graph)
+            else:
+                # sibset1's aunt/uncle is in sibset2 (sibset2 = aunts/uncles of sibset1)
+                results_tmp = []
+            for resu in results_tmp:
+                this_pair = getPairName(resu[0], resu[1])
+                if not this_pair in checked:
+                    resu.append('inferred3')
+                    printResult(resu, outfile)
+                    checked.add(this_pair)
+            if ind1_original != ind1 or ind2_original != ind2:
+                for res in results_tmp:
+                    if (res[0] == ind1 and res[1] == ind2) or (res[0] == ind2 and res[1] == ind1):
+                        closest_result = res
+                        break
+                if closest_result[2] == '1U':
+                    closest_result[2] = 1
+                elif closest_result[2] == 'A':
+                    closest_result[2] = 2
+                total = int(closest_result[2])
+
+        # DONE INFERRING ind1, ind2's relationship
+
+        # DEDUCE RELATIONSHIPS FOR PASSED-THROUGH SAMPLES THROUGH
+        # ind1_original and ind2_original.
+        # Is for cases where we've traveled through the graph.
+        if ind1_original != ind1 or ind2_original != ind2:
+            for ii in range(len(moves1)-1,-1,-1):
+                #go through each move in moves1, add move length to total
+                #only add if total != 0 (i.e., there is a relationship)
+                if total > 0:
+                    if moves1[ii] in ['P','C','PC']:
+                        total = total + 1
+                    else: #gp or gc
+                        total = total + 2
+                (refined, this_pair) = getPairD_w_Name(moves_inds1[ii], ind2, all_rel)
+                if not this_pair in checked:
+                    printResult([moves_inds1[ii],ind2,total,refined, 'graph+inferred1'], outfile)
+                    checked.add(this_pair)
+                #check for close relatives of moves_inds[ii]
+                [sib1, avunc1_bothsides, nn1, par1, child1, pc1, gp1, gc1, halfsib1_sets, twins1] = pullFamily(rel_graph, moves_inds1[ii])
+                for s1 in sib1:
+                    (refined, this_pair) = getPairD_w_Name(s1, ind2, all_rel)
+                    if not this_pair in checked:
+                        printResult([s1, ind2, total, refined, 'graph+inferred2'], outfile)
+                        checked.add(this_pair)
+                sib1.add(moves_inds1[ii])
                 hs1 = checkUseHalfsibs(sib1, halfsib1_sets, ind2, all_rel)
-                hs2 = checkUseHalfsibs(sib2, halfsib2_sets, ind1, all_rel)
-                sib1 = sib1.union(set(hs1))
-                sib2 = sib2.union(set(hs2))
-
-                reltype = getRelationship(rel_graph, ind1, ind2)
-                if reltype != -1:
-                    refined = getPairwiseD(ind1, ind2, all_rel)
-                    results.append([ind1,ind2,reltype,refined, 'graph2'])
-                else: #no path between individuals
-                    #check if ind1 has parents/grandparents more closely related to other set of individuals
-                    ind1_original = ind1
-                    ind1_new = checkForMoveUp(all_rel, ind1, sib1, par1.union(gp1), pc1, sib2)
-                    moves1 = []
-                    moves_inds1 = []
-                    if ind1_new == 'same': # same as ind2: shouldn't happen, but just in case
-                        moves1.append(getRelationship(rel_graph, ind1_new, ind1))
-                        moves_inds1.append(ind1)
-                    while ind1 != ind1_new and ind1_new != 'same':
-                        moves1.append(getRelationship(rel_graph,ind1_new, ind1))
-                        moves_inds1.append(ind1)
-                        ind1 = ind1_new
-                        [sib1, avunc1_bothsides, nn1, par1, child1, pc1, gp1, gc1, halfsib1_sets, twins1] = pullFamily(rel_graph, ind1)
-                        sib1.add(ind1)
-                        ind1_new = checkForMoveUp(all_rel, ind1, sib1, gp1.union(par1), pc1, sib2)
-
-                    if ind1_new == 'same': # ind1_new same as ind2?
-                        same = anyIn(gp1.union(par1), sib2)
-                        if len(same):
-                            ind1 = same[0]
-                        else:
-                            ind1 = anyIn(pc1,sib2)[0]
-                        [sib1, avunc1_bothsides, nn1, par1, child1, pc1, gp1, gc1, halfsib1_sets, twins1] = pullFamily(rel_graph, ind1)
-                    else:
-                        # check if ind2 has parents/grandparentsmore closely related to other set of individuals
-                        ind2_original = ind2
-                        ind2_new = checkForMoveUp(all_rel, ind2,sib2,gp2.union(par2), pc2, sib1)
-                        moves2 = []
-                        moves_inds2 = []
-                        if ind2_new == 'same':
-                            moves2.append(getRelationship(rel_graph, ind2_new, ind2))
-                            moves_inds2.append(ind2)
-                        while ind2 != ind2_new and ind2_new != 'same':
-                            moves2.append(getRelationship(rel_graph, ind2_new, ind2))
-                            moves_inds2.append(ind2)
-                            ind2 = ind2_new
-                            [sib2, avunc2_bothsides, nn2, par2, child2, pc2, gp2, gc2, halfsib2_sets, twins2] = pullFamily(rel_graph, ind2)
-                            sib2.add(ind2)
-                            ind2_new = checkForMoveUp(all_rel, ind2, sib2, gp2.union(par2), pc2, sib1)
-
-                        if ind2_new == 'same':
-                            same = anyIn(gp2.union(par2), sib1)
-                            if len(same):
-                                ind2 = same[0]
+                for h1 in hs1:
+                    (refined, this_pair) = getPairD_w_Name(h1, ind2, all_rel)
+                    if not this_pair in checked:
+                        printResult([h1,ind2,total,refined, 'graph+inferred3'], outfile)
+                        checked.add(this_pair)
+                for t1 in twins1:
+                    (refined, this_pair) = getPairD_w_Name(t1, ind2, all_rel)
+                    if not this_pair in checked:
+                        printResult([h1,ind2,total,refined, 'graph+inferredt1'], outfile)
+                        checked.add(this_pair)
+                for p in pc1:
+                    if not p in moves_inds1:  # if we didn't/won't travel through this relationship
+                        (refined, this_pair) = getPairD_w_Name(p, ind2, all_rel)
+                        if not this_pair in checked:
+                            if total > 0:
+                                printResult([p,ind2,total+1,refined,'graph+inferred4'], outfile)
                             else:
-                                ind2 = anyIn(pc2,sib1)[0]
-                            [sib2, avunc2_bothsides, nn2, par2, child2, pc2, gp2, gc2, halfsib2_sets, twins2] = pullFamily(rel_graph, ind2)
+                                printResult([p,ind2,total,refined,'graph+inferred5'], outfile)
+                            checked.add(this_pair)
 
-                    # ind1 and ind2 can't be related via graph, otherwise they'd be considered above
-                    # continue onto composite relatedness method
-
-                    #switch focus to youngest generation if available
-                    if ind1_new != 'same' and ind2_new != 'same':
-                        if len(avunc1_bothsides) or len(avunc2_bothsides):
-                            [relavunc1, relavunc2, unused1, unused2] = checkRelevantAuntsUncles(sib1, sib2, avunc1_bothsides, avunc2_bothsides, par1, par2, all_rel)
-                            # if relavunc1 == 'av':
-                            #     results_tmp = []
-                            #     for s1 in sib1:
-                            #         for s2 in sib2:
-                            #             refined = getPairwiseD(s1, s2, all_rel)
-                            #             results_tmp.append([s1,s2,'A',refined,"graph"])
-                            #     closest_result = [ind1,ind2,2,refined,"graph"] #refined may not be true Refined IBD inference for exact pair, but doesn't matter
-                            # elif relavunc2 == 'av':
-                            #     results_tmp = []
-                            #     for s1 in sib1:
-                            #         for s2 in sib2:
-                            #             refined = getPairwiseD(s1, s2, all_rel)
-                            #             results_tmp.append([s2,s1,'A',refined,"graph"])
-                            #     closest_result = [ind1,ind2,2,refined,'graph']
-                            # elif relavunc1 == 'sibparent':
-                            #     results_tmp = []
-                            #     for s1 in sib1:
-                            #         for s2 in sib2:
-                            #             refined = getPairwiseD(s1, s2, all_rel)
-                            #             results_tmp.append([s1,s2,''])
-                            #
-                            # elif relavunc2 == 'sibparent':
-                            #
-                            # else:
-                            if relavunc1 != 'av':
-                                if not len(relavunc1) and len(nn1):
-                                    # tmp = sib1[:]
-                                    # sib1 = nn1[:]
-                                    # avunc1_bothsides = [tmp[:]]
-                                    # nn1 = []  # doesn't matter
-                                    old_ind1 = ind1
-                                    sib1 = getLargestSibsets(rel_graph, nn1)
-                                    ind1 = list(sib1)[0]
-                                    [sib1, avunc1_bothsides, nn1, par1, child1, pc1, gp1, gc1, halfsib1_sets, twins1] = pullFamily(rel_graph, ind1)
-                                    sib1.add(ind1)
-                                    [relavunc1, relavunc2, unused1, unused2] = checkRelevantAuntsUncles(sib1, sib2, avunc1_bothsides, avunc2_bothsides, par1, par2, all_rel)
-                                    if relavunc1 != 'av' and not old_ind1 in relavunc1:
-                                        relavunc1.add(old_ind1)
-                                        checkAndRemove(old_ind1,unused1)
-                                if not len(relavunc2) and len(nn2):
-                                    # tmp = sib2[:]
-                                    # sib2 = nn2[:]
-                                    # avunc2_bothsides = [tmp[:]]
-                                    # nn2 = []  # doesn't matter
-                                    old_ind2 = ind2
-                                    sib2 = getLargestSibsets(rel_graph,nn2)
-                                    ind2 = list(sib2)[0]
-                                    [sib2, avunc2_bothsides, nn2, par2, child2, pc2, gp2, gc2, halfsib2_sets, twins2] = pullFamily(rel_graph, ind2)
-                                    sib2.add(ind2)
-                                    [relavunc1, relavunc2, unused1, unused2] = checkRelevantAuntsUncles(sib1, sib2, avunc1_bothsides, avunc2_bothsides, par1, par2, all_rel)
-                                    if relavunc2 != 'av' and not old_ind2 in relavunc2:
-                                        relavunc2.add(old_ind2)
-                                        checkAndRemove(old_ind2, unused2)
-
-                                if len(unused1):
-                                    unused_check = set()
-                                    for i1 in unused1:
-                                        if not i1 in unused_check:
-                                            [sib1u, avunc1u_bothsides, nn1u, par1u, child1u, pc1u, gp1u, gc1u, halfsib1u_sets, twins1u] = pullFamily(rel_graph, i1)
-                                            sib1u.add(i1)
-                                            unused_check = unused_check.union(sib1u)
-                                            results_to_add = combineBothGPsKeepProportionOnlyExpectation(sib1u, [], pc1, sib2, [], pc2, all_rel, all_segs, args.i[0], rel_graph)
-                                            for item in results_to_add:
-                                                this_pair = getPairName(item[0], item[1])
-                                                if not this_pair in checked:
-                                                    checked.add(this_pair)
-                                                    item.append('inferred1')
-                                                    results.append(item)
-                                if len(unused2):
-                                    unused_check = set()
-                                    for i2 in unused2:
-                                        if not i2 in unused_check:
-                                            [sib2u, avunc2u_bothsides, nn2u, par2u, child2u, pc2u, gp2u, gc2u, halfsib2u_sets, twins2u] = pullFamily(rel_graph, i2)
-                                            sib2u.add(ind2)
-                                            unused_check = unused_check.union(sib2u)
-                                            results_to_add = combineBothGPsKeepProportionOnlyExpectation(sib1, [], pc1, sib2u, [], pc2, all_rel, all_segs, args.i[0], rel_graph)
-                                            for item in results_to_add:
-                                                this_pair = getPairName(item[0], item[1])
-                                                if not this_pair in checked:
-                                                    checked.add(this_pair)
-                                                    item.append('inferred2')
-                                                    results.append(item)
-
-                        else:
-                            relavunc1 = []
-                            relavunc2 = []
-
-                        if relavunc1 != 'av' and relavunc2 != 'av':
-                            results_tmp = combineBothGPsKeepProportionOnlyExpectation(sib1, relavunc1, pc1, sib2, relavunc2, pc2, all_rel, all_segs, args.i[0], rel_graph)
-                        else:
-                            # sibset1's aunt/uncle is in sibset2 (sibset2 = aunts/uncles of sibset1)
-                            results_tmp = []
-                        for resu in results_tmp:
-                            this_pair = getPairName(resu[0], resu[1])
+            total = int(closest_result[2])
+            [sib1, avunc1_bothsides, nn1, par1, child1, pc1, gp1, gc1, halfsib1_sets, twins1] = pullFamily(rel_graph, ind1) #get set of close relatives of ind1
+            sib1.add(ind1)
+            for ii in range(len(moves2)-1,-1,-1):
+                if total > 0:
+                    if moves2[ii] in ['P','C','PC']:
+                        total = total + 1
+                    else: #gp or gc
+                        total = total + 2
+                for s1 in sib1:
+                    (refined, this_pair) = getPairD_w_Name(moves_inds2[ii], s1, all_rel)
+                    if not this_pair in checked:
+                        printResult([s1,moves_inds2[ii],total,refined, 'graph+inferred6'], outfile)
+                        checked.add(this_pair)
+                    #check for close relatives of moves_inds[ii]
+                    [sib2, avunc2_bothsides, nn2, par2, child2, pc2, gp2, gc2, halfsib2_sets, twins2] = pullFamily(rel_graph, moves_inds2[ii])
+                    for s2 in sib2:
+                        (refined, this_pair) = getPairD_w_Name(s1, s2, all_rel)
+                        if not this_pair in checked:
+                            printResult([s1,s2,total,refined, 'graph+inferred7'], outfile)
+                            checked.add(this_pair)
+                    sib2.add(moves_inds2[ii])
+                    hs2 = checkUseHalfsibs(sib2, halfsib2_sets, ind1, all_rel)
+                    for h2 in hs2:
+                        (refined, this_pair) = getPairD_w_Name(h2, s1, all_rel)
+                        if this_pair in checked:
+                            printResult([s1,h2,total,refined,'graph+inferred8'], outfile)
+                            checked.add(this_pair)
+                    for t2 in twins2:
+                        (refined, this_pair) = getPairD_w_Name(t2, s1, all_rel)
+                        if not this_pair in checked:
+                            printResult([s1,t2,total,refined, 'graph+inferredt2'], outfile)
+                            checked.add(this_pair)
+                    for p in pc2:
+                        if not p in moves_inds2 and not p == ind2: #if we didn't/won't travel through this relationship
+                            (refined, this_pair) = getPairD_w_Name(p, s1, all_rel)
                             if not this_pair in checked:
-                                resu.append('inferred3')
-                                results.append(resu)
-                                checked.add(this_pair)
-                        if ind1_original != ind1 or ind2_original != ind2:
-                            for res in results_tmp:
-                                if (res[0] == ind1 and res[1] == ind2) or (res[0] == ind2 and res[1] == ind1):
-                                    closest_result = res
-                                    break
-                            if closest_result[2] == '1U':
-                                closest_result[2] = 1
-                            elif closest_result[2] == 'A':
-                                closest_result[2] = 2
-                            total = int(closest_result[2])
-                    if (ind1_new == 'same' or ind2_new == 'same'):
-                        if ind1 == ind2: #catch bugs
-                            closest_result = [ind1,ind2,0]
-                        else: #siblings
-                            closest_result = [ind1,ind2,1]
-
-                    elif ind1_original != ind1 or ind2_original != ind2: #if we've travelled through the graph
-                        for ii in range(len(moves1)-1,-1,-1):
-                            #go through each move in moves1, add move length to total
-                            #only add if total != 0 (i.e., there is a relationship)
-                            if total > 0:
-                                if moves1[ii] in ['P','C','PC']:
-                                    total = total + 1
-                                else: #gp or gc
-                                    total = total + 2
-                            (refined, this_pair) = getPairD_w_Name(moves_inds1[ii], ind2, all_rel)
-                            if not this_pair in checked:
-                                results.append([moves_inds1[ii],ind2,total,refined, 'graph+inferred1'])
-                                checked.add(this_pair)
-                            #check for close relatives of moves_inds[ii]
-                            [sib1, avunc1_bothsides, nn1, par1, child1, pc1, gp1, gc1, halfsib1_sets, twins1] = pullFamily(rel_graph, moves_inds1[ii])
-                            for s1 in sib1:
-                                (refined, this_pair) = getPairD_w_Name(s1, ind2, all_rel)
-                                if not this_pair in checked:
-                                    results.append([s1, ind2, total, refined, 'graph+inferred2'])
-                                    checked.add(this_pair)
-                            sib1.add(moves_inds1[ii])
-                            hs1 = checkUseHalfsibs(sib1, halfsib1_sets, ind2, all_rel)
-                            for h1 in hs1:
-                                (refined, this_pair) = getPairD_w_Name(h1, ind2, all_rel)
-                                if not this_pair in checked:
-                                    results.append([h1,ind2,total,refined, 'graph+inferred3'])
-                                    checked.add(this_pair)
-                            for p in pc1:
-                                if not p in moves_inds1:  # if we didn't travel through this relationship already
-                                    (refined, this_pair) = getPairD_w_Name(p, ind2, all_rel)
-                                    if not this_pair in checked:
-                                        if total > 0:
-                                            results.append([p,ind2,total+1,refined,'graph+inferred4'])
-                                        else:
-                                            results.append([p,ind2,total,refined,'graph+inferred5'])
-                                        checked.add(this_pair)
-
-                        total = int(closest_result[2])
-                        [sib1, avunc1_bothsides, nn1, par1, child1, pc1, gp1, gc1, halfsib1_sets, twins1] = pullFamily(rel_graph, ind1) #get set of close relatives of ind1
-                        sib1.add(ind1)
-                        for ii in range(len(moves2)-1,-1,-1):
-                            if total > 0:
-                                if moves2[ii] in ['P','C','PC']:
-                                    total = total + 1
-                                else: #gp or gc
-                                    total = total + 2
-                            for s1 in sib1:
-                                (refined, this_pair) = getPairD_w_Name(moves_inds2[ii], s1, all_rel)
-                                if not this_pair in checked:
-                                    results.append([s1,moves_inds2[ii],total,refined, 'graph+inferred6'])
-                                    checked.add(this_pair)
-                                #check for close relatives of moves_inds[ii]
-                                [sib2, avunc2_bothsides, nn2, par2, child2, pc2, gp2, gc2, halfsib2_sets, twins2] = pullFamily(rel_graph, moves_inds2[ii])
-                                for s2 in sib2:
-                                    (refined, this_pair) = getPairD_w_Name(s1, s2, all_rel)
-                                    if not this_pair in checked:
-                                        results.append([s1,s2,total,refined, 'graph+inferred7'])
-                                        checked.add(this_pair)
-                                sib2.add(moves_inds2[ii])
-                                hs2 = checkUseHalfsibs(sib2, halfsib2_sets, ind1, all_rel)
-                                for h2 in hs2:
-                                    (refined, this_pair) = getPairD_w_Name(h2, s1, all_rel)
-                                    if this_pair in checked:
-                                        results.append([s1,h2,total,refined,'graph+inferred8'])
-                                        checked.add(this_pair)
-                                for p in pc2:
-                                    if not p in moves_inds2 and not p == ind2: #if we didn't travel through this relationship already
-                                        (refined, this_pair) = getPairD_w_Name(p, s1, all_rel)
-                                        if not this_pair in checked:
-                                            if total > 0:
-                                                results.append([s1, p, total+1, refined, 'graph+inferred9'])
-                                            else:
-                                                results.append([s1, p, total, refined, 'graph+inferred9'])
-                                            checked.add(this_pair)
-
-                        if len(moves1) and len(moves2):
-                            total = int(closest_result[2])
-                            for i1 in range(len(moves1)-1,-1,-1):
                                 if total > 0:
-                                    if moves1[i1] in ['P', 'C', 'PC']:
-                                        total = total + 1
-                                    else:
-                                        total = total + 2
-                                for i2 in range(len(moves2)-1,-1,-1):
-                                    if total > 0:
-                                        if moves2[i2] in ['P', 'C', 'PC']:
-                                            total = total + 1
-                                        else:
-                                            total = total + 2
-                                    (refined, this_pair) = getPairD_w_Name(moves_inds1[i1], moves_inds2[i2], all_rel)
-                                    if not this_pair in checked:
-                                        results.append([moves_inds1[i1],moves_inds2[i2],total,refined, 'graph+inferred10'])
-                                        checked.add(this_pair)
+                                    printResult([s1, p, total+1, refined, 'graph+inferred9'], outfile)
+                                else:
+                                    printResult([s1, p, total, refined, 'graph+inferred9'], outfile)
+                                checked.add(this_pair)
 
-                                    # check for close relatives of moves_inds[ii]
-                                    [sib1, avunc1_bothsides, nn1, par1, child1, pc1, gp1, gc1, halfsib1_sets, twins1] = pullFamily(rel_graph, moves_inds1[i1])
-                                    [sib2, avunc2_bothsides, nn2, par2, child2, pc2, gp2, gc2, halfsib2_sets, twins2] = pullFamily(rel_graph, moves_inds2[i2])
-                                    for s1 in sib1:
-                                        (refined, this_pair) = getPairD_w_Name(s1, moves_inds2[i2], all_rel)
-                                        if not this_pair in checked:
-                                            results.append([s1, moves_inds2[i2], total, refined, 'graph+inferred11'])
-                                            checked.add(this_pair)
-                                    for s2 in sib2:
-                                        (refined, this_pair) = getPairD_w_Name(s2, moves_inds1[i1], all_rel)
-                                        if not this_pair in checked:
-                                            results.append([moves_inds1[i1], s2, total, refined, 'graph+inferred12'])
-                                            checked.add(this_pair)
-                                        for s1 in sib1:
-                                            (refined, this_pair) = getPairD_w_Name(s1, s2, all_rel)
-                                            if not this_pair in checked:
-                                                results.append([s1, s2, total, refined, 'graph+inferred13'])
-                                                checked.add(this_pair)
-                                    sib1 = list(sib1)
-                                    sib2 = list(sib2)
-                                    sib1.append(moves_inds1[i1])
-                                    sib2.append(moves_inds2[i2])
-                                    hs1 = checkUseHalfsibs(sib1, halfsib1_sets, ind2, all_rel)
-                                    hs2 = checkUseHalfsibs(sib2, halfsib2_sets, ind1, all_rel)
-                                    for h1 in hs1:
-                                        this_pair = getPairName(h1, ind2)
-                                        if not this_pair in checked:
-                                            results.append([h1, ind2, total, refined, 'graph+inferred14'])
-                                            checked.add(this_pair)
-                                    for h2 in hs2:
-                                        this_pair = getPairName(h2, ind1)
-                                        if not this_pair in checked:
-                                            results.append([ind1, h2, total, refined, 'graph+inferred15'])
-                                            checked.add(this_pair)
-                                        for h1 in hs1:
-                                            this_pair = getPairName(h1, h2)
-                                            if not this_pair in checked:
-                                                results.append([h1,h2,total,refined, 'graph+inferred16'])
-                                                checked.add(this_pair)
+            if len(moves1) and len(moves2):
+                total = int(closest_result[2])
+                for i1 in range(len(moves1)-1,-1,-1):
+                    if total > 0:
+                        if moves1[i1] in ['P', 'C', 'PC']:
+                            total = total + 1
+                        else:
+                            total = total + 2
+                    for i2 in range(len(moves2)-1,-1,-1):
+                        if total > 0:
+                            if moves2[i2] in ['P', 'C', 'PC']:
+                                total = total + 1
+                            else:
+                                total = total + 2
+                        (refined, this_pair) = getPairD_w_Name(moves_inds1[i1], moves_inds2[i2], all_rel)
+                        if not this_pair in checked:
+                            printResult([moves_inds1[i1],moves_inds2[i2],total,refined, 'graph+inferred10'], outfile)
+                            checked.add(this_pair)
 
-
-                if len(twins1):
-                    for res in results:
-                        if sibs1[0] == res[0]:
+                        # check for close relatives of moves_inds[ii]
+                        [sib1, avunc1_bothsides, nn1, par1, child1, pc1, gp1, gc1, halfsib1_sets, twins1] = pullFamily(rel_graph, moves_inds1[i1])
+                        [sib2, avunc2_bothsides, nn2, par2, child2, pc2, gp2, gc2, halfsib2_sets, twins2] = pullFamily(rel_graph, moves_inds2[i2])
+                        for s1 in sib1:
+                            (refined, this_pair) = getPairD_w_Name(s1, moves_inds2[i2], all_rel)
+                            if not this_pair in checked:
+                                printResult([s1, moves_inds2[i2], total, refined, 'graph+inferred11'], outfile)
+                                checked.add(this_pair)
+                        for s2 in sib2:
+                            (refined, this_pair) = getPairD_w_Name(s2, moves_inds1[i1], all_rel)
+                            if not this_pair in checked:
+                                printResult([moves_inds1[i1], s2, total, refined, 'graph+inferred12'], outfile)
+                                checked.add(this_pair)
+                            for s1 in sib1:
+                                (refined, this_pair) = getPairD_w_Name(s1, s2, all_rel)
+                                if not this_pair in checked:
+                                    printResult([s1, s2, total, refined, 'graph+inferred13'], outfile)
+                                    checked.add(this_pair)
+                        sib1.add(moves_inds1[i1])
+                        sib2.add(moves_inds2[i2])
+                        hs1 = checkUseHalfsibs(sib1, halfsib1_sets, ind2, all_rel)
+                        hs2 = checkUseHalfsibs(sib2, halfsib2_sets, ind1, all_rel)
+                        for h1 in hs1:
+                            (refined, this_pair) = getPairD_w_Name(h1, moves_inds2[i2], all_rel)
+                            if not this_pair in checked:
+                                printResult([h1, moves_inds2[i2], total, refined, 'graph+inferred14'], outfile)
+                                checked.add(this_pair)
+                        for h2 in hs2:
+                            (refined, this_pair) = getPairD_w_Name(h2, moves_ind1[i1], all_rel)
+                            if not this_pair in checked:
+                                printResult([moves_inds1[i1], h2, total, refined, 'graph+inferred15'], outfile)
+                                checked.add(this_pair)
+                            for h1 in hs1:
+                                (refined, this_pair) = getPairD_w_Name(h1, h2, all_rel)
+                                if not this_pair in checked:
+                                    printResult([h1,h2,total,refined, 'graph+inferred16'], outfile)
+                                    checked.add(this_pair)
+                        for t1 in twins1:
+                            (refined, this_pair) = getPairName(t1, moves_inds2[i2], all_rel)
+                            if not this_pair in checked:
+                                printResult([t1, moves_inds2[i2], total, refined, 'graph+inferredt3'], outfile)
+                                checked.add(this_pair)
+                        for t2 in twins2:
+                            (refined, this_pair) = getPairD_w_Name(t2, moves_inds1[i1], all_rel)
+                            if not this_pair in checked:
+                                printResult([moves_inds1[i1], t2, total, refined, 'graph+inferredt4'], outfile)
+                                checked.add(this_pair)
                             for t1 in twins1:
-                                results.append([t1,res[1],res[2],res[3],'graph3'])
-                                this_pair = getPairName(t1, res[1])
-                                checked.add(this_pair)
-                        elif sibs1[0] == res[1]:
-                            for t1 in twins1:
-                                results.append([res[0],t1,res[2],res[3],'graph4'])
-                                this_pair = getPairName(t1, res[0])
-                                checked.add(this_pair)
-
-                if len(twins2):
-                    for res in results:
-                        if sibs2[0] == res[0]:
-                            for t2 in twins2:
-                                results.append([t2, res[1], res[2], res[3],'graph5'])
-                                this_pair = getPairName(t2, res[1])
-                                checked.add(this_pair)
-                        elif sibs2[0] == res[1]:
-                            for t2 in twins2:
-                                results.append([res[0], t2, res[2], res[3],'graph6'])
-                                this_pair = getPairName(t2, res[0])
-                                checked.add(this_pair)
-
-            all_results += results
-
-    return all_results
+                                (refined, this_pair) = getPairD_w_Name(t1, t2, all_rel)
+                                if not this_pair in checked:
+                                    printResult([t1, t2, total, refined, 'graph+inferredt5'], outfile)
+                                    checked.add(this_pair)
