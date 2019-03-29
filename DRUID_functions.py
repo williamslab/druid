@@ -946,15 +946,13 @@ def combineBothGPsKeepProportionOnlyExpectation(sib1, avunc1, pc1, sib2, avunc2,
 
 def checkRelevantAuntsUncles(sibset1, sibset2, avunc1_bothsides, avunc2_bothsides, par1, par2, all_rel):
     # check whether aunt/uncle should be included in analysis
-    avunc1 = []
-    avunc2 = []
-    if len(avunc1_bothsides):
-        for i in range(0, len(avunc1_bothsides)):
-            avunc1 += list(avunc1_bothsides[i])
+    avunc1 = set()
+    avunc2 = set()
+    for avset1 in avunc1_bothsides:
+      avunc1 = avunc1.union(avset1)
 
-    if len(avunc2_bothsides):
-        for i in range(0, len(avunc2_bothsides)):
-            avunc2 += list(avunc2_bothsides[i])
+    for avset2 in avunc2_bothsides:
+      avunc2 = avunc2.union(avset2)
 
 
     for av1 in avunc1:
@@ -963,7 +961,7 @@ def checkRelevantAuntsUncles(sibset1, sibset2, avunc1_bothsides, avunc2_bothside
         if av1 in sibset2:
             return ['av',[], [], []] #sibset1's aunt/uncle is in sibset2 (sibset2 = aunts/uncles of sibset1)
 
-    for av2 in avunc2: #
+    for av2 in avunc2:
         if av2 in par1:
             return [[], 'same', [], []]
         if av2 in sibset1:
@@ -1007,29 +1005,21 @@ def checkRelevantAuntsUncles(sibset1, sibset2, avunc1_bothsides, avunc2_bothside
             if kinship > minsib:
                 relavunc1.add(a1)
 
+    unused1 = set()
+    unused2 = set()
     if len(avunc1_bothsides):
-        for i1 in relavunc1:
-            for i in range(0,len(avunc1_bothsides)):
-                if i1 in avunc1_bothsides[i]:
-                    relavunc1 = relavunc1.union(avunc1_bothsides[i])
+        for avset1 in avunc1_bothsides:
+            if avset1.intersection(relavunc1):
+                relavunc1 = relavunc1.union(avset1)
+            else:
+                unused1 = unused1.union(avset1)
 
     if len(avunc2_bothsides):
-        for i2 in relavunc2:
-            for i in range(0,len(avunc2_bothsides)):
-                if i2 in avunc2_bothsides[i]:
-                    relavunc2 = relavunc2.union(avunc2_bothsides[i])
-
-
-
-    unused1 = []
-    unused2 = []
-    for ind1 in avunc1:
-        if not ind1 in relavunc1:
-            unused1.append(ind1)
-
-    for ind2 in avunc2:
-        if not ind2 in relavunc2:
-            unused2.append(ind2)
+        for avset2 in avunc2_bothsides:
+            if avset2.intersection(relavunc2):
+                relavunc2 = relavunc2.union(avset2)
+            else:
+                unused2 = unused2.union(avset2)
 
     return [relavunc1, relavunc2, unused1, unused2]
 
@@ -1428,53 +1418,6 @@ def runDRUID(rel_graph, all_rel, inds, all_segs, args, outfile):
                             relavunc2.add(old_ind2)
                             checkAndRemove(old_ind2, unused2)
 
-                    if len(unused1):
-                        unused_check = set()
-                        for i1 in unused1:
-                            if not i1 in unused_check:
-                                [sib1u, avunc1u_bothsides, nn1u, par1u, child1u, pc1u, gp1u, gc1u, halfsib1u_sets, twins1u] = pullFamily(rel_graph, i1)
-                                sib1u.add(i1)
-                                unused_check = unused_check.union(sib1u)
-                                results_to_add = combineBothGPsKeepProportionOnlyExpectation(sib1u, [], pc1, sib2, [], pc2, all_rel, all_segs, args.i[0], rel_graph)
-                                for item in results_to_add:
-                                    item.append('inferred1')
-                                    this_pair = getPairName(item[0], item[1])
-                                    if not this_pair in checked:
-                                        printResult(item, outfile)
-                                        checked.add(this_pair)
-                                    # handle twins of i1:
-                                    if len(twins1u):
-                                        for idx in range(2):
-                                            if i1 == item[idx]:
-                                                for t1 in twins1u:
-                                                    this_pair = getPairName(t1, item[1 - idx])
-                                                    if not this_pair in checked:
-                                                        printResult([t1, item[1 - idx], item[2], item[3], item[4]], outfile)
-                                                        checked.add(this_pair)
-
-                    if len(unused2):
-                        unused_check = set()
-                        for i2 in unused2:
-                            if not i2 in unused_check:
-                                [sib2u, avunc2u_bothsides, nn2u, par2u, child2u, pc2u, gp2u, gc2u, halfsib2u_sets, twins2u] = pullFamily(rel_graph, i2)
-                                sib2u.add(ind2)
-                                unused_check = unused_check.union(sib2u)
-                                results_to_add = combineBothGPsKeepProportionOnlyExpectation(sib1, [], pc1, sib2u, [], pc2, all_rel, all_segs, args.i[0], rel_graph)
-                                for item in results_to_add:
-                                    item.append('inferred2')
-                                    this_pair = getPairName(item[0], item[1])
-                                    if not this_pair in checked:
-                                        printResult(item, outfile)
-                                        checked.add(this_pair)
-                                    # handle twins of i2:
-                                    if len(twins2u):
-                                        for idx in range(2):
-                                            if i2 == item[idx]:
-                                                for t2 in twins2u:
-                                                    this_pair = getPairName(t2, item[1 - idx])
-                                                    if not this_pair in checked:
-                                                        printResult([t2, item[1 - idx], item[2], item[3], item[4]], outfile)
-                                                        checked.add(this_pair)
 
             # NO AUNT/UNCLE SETS
             else:

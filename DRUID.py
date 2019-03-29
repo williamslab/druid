@@ -5,8 +5,8 @@ from DRUID_functions import *
 from DRUID_graph_interaction import *
 import argparse
 
-version='v1.02.3'
-update='28 Mar 2019'
+version='v1.02.4'
+update='29 Mar 2019'
 
 #import cProfile, pstats
 #pr = cProfile.Profile()
