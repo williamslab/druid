@@ -5,7 +5,7 @@ from DRUID_functions import *
 from DRUID_graph_interaction import *
 import argparse
 
-version='v1.02.4'
+version='v1.02.5'
 update='29 Mar 2019'
 
 #import cProfile, pstats

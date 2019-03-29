@@ -731,6 +731,7 @@ def getExpectedPar(num_sibs):
 def combineBothGPsKeepProportionOnlyExpectation(sib1, avunc1, pc1, sib2, avunc2, pc2, all_rel, all_segs, results_file, rel_graph):
 # perform ancestral genome reconstruction between two groups of related individuals (sib1+avunc1 and sib2+avunc2)
 # infers relatedness between all individuals within the two groups
+    # TODO: use any neice/nephews of sib1, sib2 as well
     if len(sib1) == 1 and len(sib2) == 1 and len(avunc1) == 0 and len(avunc2) == 0:
         i1 = next(iter(sib1))
         i2 = next(iter(sib2))
@@ -1363,62 +1364,8 @@ def runDRUID(rel_graph, all_rel, inds, all_segs, args, outfile):
         # DO MAIN DRUID INFERENCE using the current ind1 and ind2
         else:
             # ANY AUNT/UNCLE SETS?
-            # Switch focus to youngest generation if available
             if len(avunc1_bothsides) or len(avunc2_bothsides):
                 [relavunc1, relavunc2, unused1, unused2] = checkRelevantAuntsUncles(sib1, sib2, avunc1_bothsides, avunc2_bothsides, par1, par2, all_rel)
-                # if relavunc1 == 'av':
-                #     for s1 in sib1:
-                #         for s2 in sib2:
-                #             refined = getPairwiseD(s1, s2, all_rel)
-                #             printResult([s1,s2,'A',refined,"graph"], outfile)
-                #     closest_result = [ind1,ind2,2,refined,"graph"] #refined may not be true Refined IBD inference for exact pair, but doesn't matter
-                # elif relavunc2 == 'av':
-                #     for s1 in sib1:
-                #         for s2 in sib2:
-                #             refined = getPairwiseD(s1, s2, all_rel)
-                #             printResult([s2,s1,'A',refined,"graph"], outfile)
-                #     closest_result = [ind1,ind2,2,refined,'graph']
-                # elif relavunc1 == 'sibparent':
-                #     results_tmp = []
-                #     for s1 in sib1:
-                #         for s2 in sib2:
-                #             refined = getPairwiseD(s1, s2, all_rel)
-                #             results_tmp.append([s1,s2,''])
-                #
-                # elif relavunc2 == 'sibparent':
-                #
-                # else:
-                if relavunc1 != 'av':
-                    if not len(relavunc1) and len(nn1):
-                        # tmp = sib1[:]
-                        # sib1 = nn1[:]
-                        # avunc1_bothsides = [tmp[:]]
-                        # nn1 = []  # doesn't matter
-                        old_ind1 = ind1
-                        sib1 = getLargestSibsets(rel_graph, nn1)
-                        ind1 = list(sib1)[0]
-                        [sib1, avunc1_bothsides, nn1, par1, child1, pc1, gp1, gc1, halfsib1_sets, twins1] = pullFamily(rel_graph, ind1)
-                        sib1.add(ind1)
-                        [relavunc1, relavunc2, unused1, unused2] = checkRelevantAuntsUncles(sib1, sib2, avunc1_bothsides, avunc2_bothsides, par1, par2, all_rel)
-                        if relavunc1 != 'av' and not old_ind1 in relavunc1:
-                            relavunc1.add(old_ind1)
-                            checkAndRemove(old_ind1,unused1)
-                    if not len(relavunc2) and len(nn2):
-                        # tmp = sib2[:]
-                        # sib2 = nn2[:]
-                        # avunc2_bothsides = [tmp[:]]
-                        # nn2 = []  # doesn't matter
-                        old_ind2 = ind2
-                        sib2 = getLargestSibsets(rel_graph,nn2)
-                        ind2 = list(sib2)[0]
-                        [sib2, avunc2_bothsides, nn2, par2, child2, pc2, gp2, gc2, halfsib2_sets, twins2] = pullFamily(rel_graph, ind2)
-                        sib2.add(ind2)
-                        [relavunc1, relavunc2, unused1, unused2] = checkRelevantAuntsUncles(sib1, sib2, avunc1_bothsides, avunc2_bothsides, par1, par2, all_rel)
-                        if relavunc2 != 'av' and not old_ind2 in relavunc2:
-                            relavunc2.add(old_ind2)
-                            checkAndRemove(old_ind2, unused2)
-
-
             # NO AUNT/UNCLE SETS
             else:
                 relavunc1 = []
