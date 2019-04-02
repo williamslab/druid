@@ -731,7 +731,8 @@ def getExpectedPar(num_sibs):
 def combineBothGPsKeepProportionOnlyExpectation(sib1, avunc1, pc1, sib2, avunc2, pc2, all_rel, all_segs, results_file, rel_graph):
 # perform ancestral genome reconstruction between two groups of related individuals (sib1+avunc1 and sib2+avunc2)
 # infers relatedness between all individuals within the two groups
-    # TODO: use any neice/nephews of sib1, sib2 as well
+    # TODO! use any neice/nephews of sib1, sib2 as well
+    # TODO: handle twins in this?
     if len(sib1) == 1 and len(sib2) == 1 and len(avunc1) == 0 and len(avunc2) == 0:
         i1 = next(iter(sib1))
         i2 = next(iter(sib2))
@@ -1006,23 +1007,17 @@ def checkRelevantAuntsUncles(sibset1, sibset2, avunc1_bothsides, avunc2_bothside
             if kinship > minsib:
                 relavunc1.add(a1)
 
-    unused1 = set()
-    unused2 = set()
     if len(avunc1_bothsides):
         for avset1 in avunc1_bothsides:
             if avset1.intersection(relavunc1):
                 relavunc1 = relavunc1.union(avset1)
-            else:
-                unused1 = unused1.union(avset1)
 
     if len(avunc2_bothsides):
         for avset2 in avunc2_bothsides:
             if avset2.intersection(relavunc2):
                 relavunc2 = relavunc2.union(avset2)
-            else:
-                unused2 = unused2.union(avset2)
 
-    return [relavunc1, relavunc2, unused1, unused2]
+    return [relavunc1, relavunc2]
 
 
 def getTotalLength(IBD):
@@ -1314,12 +1309,12 @@ def runDRUID(rel_graph, all_rel, inds, all_segs, args, outfile):
             ind1_new = checkForMoveUp(all_rel, ind1, sib1, gp1.union(par1), pc1, sib2)
 
         if ind1_new == 'same': # ind1_new in sib2
-            overlap = gp1.union(par1).intersect(sib2)
+            overlap = gp1.union(par1).intersection(sib2)
             assert ind2 not in overlap, "ERROR: apparent path between individuals not in same graph"
             if len(overlap):
                 ind1 = next(iter(overlap)) # any of the siblings will do
             else:
-                overlap = pc1.intersect(sib2)
+                overlap = pc1.intersection(sib2)
                 assert ind2 not in overlap, "ERROR: apparent path between individuals not in same graph"
                 ind1 = next(iter(overlap)) # any of the siblings will do
             [sib1, avunc1_bothsides, nn1, par1, child1, pc1, gp1, gc1, halfsib1_sets, twins1] = pullFamily(rel_graph, ind1)
@@ -1343,12 +1338,12 @@ def runDRUID(rel_graph, all_rel, inds, all_segs, args, outfile):
                 ind2_new = checkForMoveUp(all_rel, ind2, sib2, gp2.union(par2), pc2, sib1)
 
             if ind2_new == 'same':
-                overlap = gp2.union(par2).intersect(sib1)
+                overlap = gp2.union(par2).intersection(sib1)
                 assert ind1 not in overlap, "ERROR: apparent path between individuals not in same graph"
                 if len(overlap):
                     ind2 = next(iter(overlap)) # any of the siblings will do
                 else:
-                    overlap = pc2.intersect(sib1)
+                    overlap = pc2.intersection(sib1)
                     assert ind1 not in overlap, "ERROR: apparent path between individuals not in same graph"
                     ind2 = next(iter(overlap)) # any of the siblings will do
                 [sib2, avunc2_bothsides, nn2, par2, child2, pc2, gp2, gc2, halfsib2_sets, twins2] = pullFamily(rel_graph, ind2)
@@ -1365,21 +1360,27 @@ def runDRUID(rel_graph, all_rel, inds, all_segs, args, outfile):
         else:
             # ANY AUNT/UNCLE SETS?
             if len(avunc1_bothsides) or len(avunc2_bothsides):
-                [relavunc1, relavunc2, unused1, unused2] = checkRelevantAuntsUncles(sib1, sib2, avunc1_bothsides, avunc2_bothsides, par1, par2, all_rel)
+                [relavunc1, relavunc2] = checkRelevantAuntsUncles(sib1, sib2, avunc1_bothsides, avunc2_bothsides, par1, par2, all_rel)
             # NO AUNT/UNCLE SETS
             else:
                 relavunc1 = []
                 relavunc2 = []
 
             if relavunc1 != 'av' and relavunc2 != 'av':
+                # DO THE INFERENCE
                 results_tmp = combineBothGPsKeepProportionOnlyExpectation(sib1, relavunc1, pc1, sib2, relavunc2, pc2, all_rel, all_segs, args.i[0], rel_graph)
             else:
+                # TODO: understand this case -- seems like it doesn't work
+                #       Perhaps we want
+                #closest_result = [ind1, ind2, 2] # aunt/uncle
+                # TODO: seems like this ought to be impossible
                 # sibset1's aunt/uncle is in sibset2 (sibset2 = aunts/uncles of sibset1)
                 results_tmp = []
             for resu in results_tmp:
                 this_pair = getPairName(resu[0], resu[1])
                 if not this_pair in checked:
                     resu.append('inferred3')
+                    # TODO: twins
                     printResult(resu, outfile)
                     checked.add(this_pair)
             if ind1_original != ind1 or ind2_original != ind2:
@@ -1399,6 +1400,8 @@ def runDRUID(rel_graph, all_rel, inds, all_segs, args, outfile):
         # ind1_original and ind2_original.
         # Is for cases where we've traveled through the graph.
         if ind1_original != ind1 or ind2_original != ind2:
+            # TODO: what if we haven't traveled through the graph? I suspect that code above
+            #       catches this
             for ii in range(len(moves1)-1,-1,-1):
                 #go through each move in moves1, add move length to total
                 #only add if total != 0 (i.e., there is a relationship)
@@ -1483,6 +1486,7 @@ def runDRUID(rel_graph, all_rel, inds, all_segs, args, outfile):
                                     printResult([s1, p, total, refined, 'graph+inferred9'], outfile)
                                 checked.add(this_pair)
 
+            # TODO: possible to avoid the code above and just use something like this?
             if len(moves1) and len(moves2):
                 total = int(closest_result[2])
                 for i1 in range(len(moves1)-1,-1,-1):
