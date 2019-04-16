@@ -5,8 +5,8 @@ from DRUID_functions import *
 from DRUID_graph_interaction import *
 import argparse
 
-version='v1.02.5'
-update='29 Mar 2019'
+version='v1.02.6'
+update='16 Apr 2019'
 
 #import cProfile, pstats
 #pr = cProfile.Profile()
@@ -73,7 +73,7 @@ print("\nInferring second degree relatives")
 inferSecondPath(rel_graph, rel_graph_tmp, all_rel, second, all_segs, args.o[0], int(args.C[0]))
 
 outfile_results = open(args.o[0]+'.DRUID','w')
-outfile_results.write("ind1\tind2\tDRUID\tRefinedIBD\tMethod\n")
+outfile_results.write("#ind1\tind2\tDRUID\tRefinedIBD\tMethod\n")
 
 print("\n\nRunning main DRUID inference")
 runDRUID(rel_graph, all_rel, inds, all_segs, args, outfile_results)

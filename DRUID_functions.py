@@ -170,10 +170,7 @@ def readSegments(file_for_segments):
 
 def inferSecondPath(rel_graph, rel_graph_tmp, all_rel, second, all_segs, outfile, C):
     # infer and add 2nd degree relationships
-    if C:
-        dc_lower = 1/2.0**(9/2.0) #minimum IBD2 for DC classification
-    else:
-        dc_lower = 1/2.0**(9/2.0)
+    dc_lower = 1/2.0**(9/2.0) #minimum IBD2 for DC classification
     for [i1, i2] in second:
         if not rel_graph.has_edge(i1, i2):
             if getIBD2(i1, i2, all_rel) < dc_lower: #proportion IBD2 less than requirement for DC classification
@@ -217,8 +214,7 @@ def inferSecondPath(rel_graph, rel_graph_tmp, all_rel, second, all_segs, outfile
                                 else:
                                     print(av + " inferred as aunt/uncle of " + sib + ", but will continue using provided relationship type " + rel_graph_tmp[av][sib]['type'] + '\n')
 
-            for sib in sibs:
-                checked.add(sib)
+            checked = checked.union(sibs)
 
     checked = set()
     for node in rel_graph.nodes():
@@ -310,7 +306,7 @@ def getChrInfo(mapfile):
 def getInferredFromK(K):
     # Return inferred degree of relatedness using kinship coefficient K
     if K >= degrees['MZ']:
-        return -1
+        return 0
     if K >= degrees[1]:
         return 1
     elif K >= degrees[2]:
@@ -334,7 +330,7 @@ def getInferredFromK(K):
     elif K >= degrees[11]:
         return 11
     else:
-        return 0
+        return -1
 
 
 def getIBDsegments(ind1, ind2, all_segs):
@@ -720,12 +716,10 @@ def getInferredWithRel(total_IBD, pct_par, pct_par_rel):
 
 
 def getExpectedGP(num_sibs,num_avunc):
-    exp = (1.0 - 1.0/2.0**(num_avunc)) + (1.0/2.0**(num_avunc+1))*(1.0-1.0/2.0**num_sibs)
-    return exp
+    return (1.0 - 1.0/2.0**(num_avunc)) + (1.0/2.0**(num_avunc+1))*(1.0-1.0/2.0**num_sibs)
 
 def getExpectedPar(num_sibs):
-    exp = (1.0-1.0/2.0**num_sibs)
-    return exp
+    return (1.0-1.0/2.0**num_sibs)
 
 
 def combineBothGPsKeepProportionOnlyExpectation(sib1, avunc1, pc1, sib2, avunc2, pc2, all_rel, all_segs, results_file, rel_graph):
@@ -739,210 +733,160 @@ def combineBothGPsKeepProportionOnlyExpectation(sib1, avunc1, pc1, sib2, avunc2,
         degree = getPairwiseD(i1, i2, all_rel)
         return [[i1,i2, degree, degree]]
 
-    cont = 1
-    for av1 in avunc1:
-        if av1 in avunc2:
-            cont = 0
-    if not cont:
-        deg = 'NA'
+    # Caller ensures this intersection is empty:
+    assert avunc1.intersection(avunc2) == set()
+
+    # returns total length of genome IBD between sibandav and sibandav_rel, number of sibs in sib1 with IBD segments, number of sibs in sib2 with IBD segments
+    [tmpsibav, sib1_len, sib2_len, av1_len, av2_len] = getSiblingRelativeFamIBDLengthIBD2(sib1, sib2, avunc1, avunc2, all_segs)
+
+    #get proportion of ancestor genome information expected on side 1
+    if av1_len != 0:
+        proportion_gp_exp = getExpectedGP(len(sib1),len(avunc1))
+        proportion_par_exp = 0
+    elif sib1_len > 1:
+        proportion_gp_exp = 0
+        proportion_par_exp = getExpectedPar(len(sib1))
     else:
-        # returns total length of genome IBD between sibandav and sibandav_rel, number of sibs in sib1 with IBD segments, number of sibs in sib2 with IBD segments
-        [tmpsibav, sib1_len, sib2_len, av1_len, av2_len] = getSiblingRelativeFamIBDLengthIBD2(sib1, sib2, avunc1, avunc2, all_segs)
+        proportion_par_exp = 0
+        proportion_gp_exp = 0
 
-        #get proportion of ancestor genome information expected on side 1
-        if av1_len != 0:
-            proportion_gp_exp = getExpectedGP(len(sib1),len(avunc1))
-            proportion_par_exp = 0
-        elif sib1_len > 1:
-            proportion_gp_exp = 0
-            proportion_par_exp = getExpectedPar(len(sib1))
+    #get proportion of ancestor genome information expectedo n side2
+    if av2_len != 0:
+        proportion_gp_rel_exp = getExpectedGP(len(sib2), len(avunc2))
+        proportion_par_rel_exp = 0
+    elif sib2_len > 1:
+        proportion_gp_rel_exp = 0
+        proportion_par_rel_exp = getExpectedPar(len(sib2))
+
+    else:
+        proportion_par_rel_exp = 0
+        proportion_gp_rel_exp = 0
+
+
+    bothSides = True
+    if proportion_gp_exp != 0:
+        if proportion_gp_rel_exp != 0: #both grandparents reconstructed
+            K_exp = getInferredWithRel(tmpsibav, proportion_gp_exp, proportion_gp_rel_exp)
+            base = 4
+        elif proportion_par_rel_exp != 0: #gp1 reconstructed, par2 reconstructed
+            K_exp = getInferredWithRel(tmpsibav, proportion_gp_exp, proportion_par_rel_exp)
+            base = 3
+        else: #gp1 reconstructed, nothing for sib2
+            K_exp = getInferredWithRel(tmpsibav, proportion_gp_exp, 0)
+            base = 2
+            bothSides = False
+    elif proportion_par_exp != 0:
+        if proportion_gp_rel_exp != 0: #par1 reconstructed, gp2 reconstructed
+            K_exp = getInferredWithRel(tmpsibav, proportion_par_exp, proportion_gp_rel_exp)
+            base = 3
+        elif proportion_par_rel_exp != 0: #par1 reconstructed, par2 reconstructed
+            K_exp = getInferredWithRel(tmpsibav, proportion_par_exp, proportion_par_rel_exp)
+            base = 2
+        else: #par1 reconstructed, nothing for sib2
+            K_exp = getInferredWithRel(tmpsibav, proportion_par_exp, 0)
+            base = 1
+            bothSides = False
+    else:
+        bothSides = False  # nothing for sib1
+        if proportion_gp_rel_exp != 0: #gp2 reconstructed
+            K_exp = getInferredWithRel(tmpsibav, 0, proportion_gp_rel_exp)
+            base = 2
+        elif proportion_par_rel_exp != 0: #par2 reconstructed
+            K_exp = getInferredWithRel(tmpsibav, 0, proportion_par_rel_exp)
+            base = 1
+        else: # neither side reconstructed
+            i1 = list(sib1)[0]
+            i2 = list(sib2)[0]
+            K_exp = getPairwiseK(i1, i2, all_rel)
+            base = 0
+
+    estimated_exp = getInferredFromK(K_exp)
+
+    IBD2 = 0
+    if bothSides and estimated_exp != 1 and K_exp > 1/2.0**(9.0/2):  #check for IBD2 if both sides are being reconstructed, might be reconstructing two sibs; K_exp is 3rd degree or closer
+        if len(avunc1) and len(avunc2):
+            sibseg = collectIBDsegments(avunc1, all_segs)
+            sibsib = collectIBDsegmentsSibsAvuncularCombine(avunc1, avunc2, all_segs)
+            IBD011 = findOverlap(sibseg, sibsib, 0, 1, 1, 0.5)
+            if len(sib2) > 1:  # could be the case that we have one sib and his/her aunts/uncles
+                sibseg2 = collectIBDsegments(avunc2, all_segs)
+                sibsib2 = collectIBDsegmentsSibsAvuncularCombine(avunc2, avunc1, all_segs)
+                IBD011_2 = findOverlap(sibseg2, sibsib2, 0, 1, 1, 0.5)
+                for chr in range(num_chrs):
+                    IBD011[chr] += IBD011_2[chr]
+                    IBD011[chr] = mergeIntervals(IBD011[chr])
+            IBD2 = getTotalLength(IBD011)
+        # TODO: if avunc1 or avunc2 have data, want to compare them with the sibs from the other side
+        elif not len(avunc1) and not len(avunc2):
+            sibseg = collectIBDsegments(sib1, all_segs)
+            sibsib = collectIBDsegmentsSibsAvuncularCombine(sib1, sib2, all_segs)
+            IBD011 = findOverlap(sibseg, sibsib, 0, 1, 1, 0.5)
+            if len(sib2) > 1: #could be the case that we have one sib and his/her aunts/uncles
+                sibseg2 = collectIBDsegments(sib2, all_segs)
+                sibsib2 = collectIBDsegmentsSibsAvuncularCombine(sib2, sib1, all_segs)
+                IBD011_2 = findOverlap(sibseg2, sibsib2, 0, 1, 1, 0.5)
+                for chr in range(num_chrs):
+                    IBD011[chr] += IBD011_2[chr]
+                    IBD011[chr] = mergeIntervals(IBD011[chr])
+            IBD2 = getTotalLength(IBD011)
+
+        if proportion_par_exp != 0:
+            IBD2 = IBD2 / proportion_par_exp
+        elif proportion_gp_exp != 0:
+            IBD2 = IBD2 / proportion_gp_exp
+        if proportion_par_rel_exp != 0:
+            IBD2 = IBD2 / proportion_par_rel_exp
+        elif proportion_gp_rel_exp != 0:
+            IBD2 = IBD2 / proportion_gp_rel_exp
+
+        if IBD2 != 0:
+            # Note: this counts IBD1 with the IBD2 via the fact that we only count IBD2 as if it
+            # were IBD1
+            estimated_exp = getInferredFromK(K_exp + IBD2 / total_genome / 2.0)
+
+    result = []
+    if estimated_exp >= 0:
+        estimated_exp = estimated_exp + base
+
+    #get all combinations of pairs for results
+    for sib_rel in sib2:
+        # same degree for siblings:
+        estimated_out_exp = estimated_exp
+        for sib in sib1:
+            refined = getPairwiseD(sib_rel, sib, all_rel)
+            to_add = [sib_rel, sib, estimated_out_exp, refined, 'combine1']
+            result.append(to_add)
+
+        # avunc1 samples 1 degree closer to sib2:
+        if estimated_exp > 0:
+            estimated_out_exp = estimated_exp - 1
         else:
-            proportion_par_exp = 0
-            proportion_gp_exp = 0
+            estimated_out_exp = -1
+        for avunc in avunc1:
+            refined = getPairwiseD(sib_rel, avunc, all_rel)
+            to_add = [sib_rel, avunc, estimated_out_exp, refined, 'combine2']
+            result.append(to_add)
 
-        #get proportion of ancestor genome information expectedo n side2
-        if av2_len != 0:
-            proportion_gp_rel_exp = getExpectedGP(len(sib2), len(avunc2))
-            proportion_par_rel_exp = 0
-        elif sib2_len > 1:
-            proportion_gp_rel_exp = 0
-            proportion_par_rel_exp = getExpectedPar(len(sib2))
-
+    for avunc_rel in avunc2:
+        # sib1 samples 1 degree closer to avunc2:
+        if estimated_exp > 0:
+            estimated_out_exp = estimated_exp - 1
         else:
-            proportion_par_rel_exp = 0
-            proportion_gp_rel_exp = 0
+            estimated_out_exp = -1
+        for sib in sib1:
+            refined = getPairwiseD(sib, avunc_rel, all_rel)
+            to_add = [sib, avunc_rel, estimated_out_exp, refined, 'combine3']
+            result.append(to_add)
 
-
-        both = 1
-        if proportion_gp_exp != 0:
-            if proportion_gp_rel_exp != 0: #both grandparents reconstructed
-                K_exp = getInferredWithRel(tmpsibav, proportion_gp_exp, proportion_gp_rel_exp)
-                base = 4
-            elif proportion_par_rel_exp != 0: #gp1 reconstructed, par2 reconstructed
-                K_exp = getInferredWithRel(tmpsibav, proportion_gp_exp, proportion_par_rel_exp)
-                base = 3
-            else:
-                K_exp = getInferredWithRel(tmpsibav, proportion_gp_exp, 0)
-                base = 2
-                both = 0
-        elif proportion_par_exp != 0:
-            if proportion_gp_rel_exp != 0:
-                K_exp = getInferredWithRel(tmpsibav, proportion_par_exp, proportion_gp_rel_exp)
-                base = 3
-            elif proportion_par_rel_exp !=0:
-                K_exp = getInferredWithRel(tmpsibav, proportion_par_exp, proportion_par_rel_exp)
-                base = 2
-            else:
-                K_exp = getInferredWithRel(tmpsibav, proportion_par_exp, 0)
-                base = 1
-                both = 0
+        # avunc1 samples 2 degrees closer to avunc2:
+        if estimated_exp > 0:
+            estimated_out_exp = estimated_exp - 2
         else:
-            both = 0
-            if proportion_gp_rel_exp != 0:
-                K_exp = getInferredWithRel(tmpsibav, 0, proportion_gp_rel_exp)
-                base = 2
-            elif proportion_par_rel_exp != 0:
-                K_exp = getInferredWithRel(tmpsibav, 0, proportion_par_rel_exp)
-                base = 1
-            else:
-                i1 = list(sib1)[0]
-                i2 = list(sib2)[0]
-                K_exp = getPairwiseK(i1, i2, all_rel)
-                base = 0
-
-        estimated_exp = getInferredFromK(K_exp)
-
-        IBD2=0
-        if both and estimated_exp != 1 and K_exp > 1/2.0**(9.0/2):  #check for IBD2 if both sides are being reconstructed, might be reconstructing two sibs; K_exp is 3rd degree or closer
-            if len(avunc1) and len(avunc2):
-                sibseg = collectIBDsegments(avunc1, all_segs)
-                sibsib = collectIBDsegmentsSibsAvuncularCombine(avunc1, avunc2, all_segs)
-                IBD011 = findOverlap(sibseg, sibsib, 0, 1, 1, 0.5)
-                if len(sib2) > 1:  # could be the case that we have one sib and his/her aunts/uncles
-                    sibseg2 = collectIBDsegments(avunc2, all_segs)
-                    sibsib2 = collectIBDsegmentsSibsAvuncularCombine(avunc2, avunc1, all_segs)
-                    IBD011_2 = findOverlap(sibseg2, sibsib2, 0, 1, 1, 0.5)
-                    for chr in range(num_chrs):
-                        IBD011[chr] += IBD011_2[chr]
-                        IBD011[chr] = mergeIntervals(IBD011[chr])
-                IBD2 = getTotalLength(IBD011)
-            elif not len(avunc1) and not len(avunc2):
-                sibseg = collectIBDsegments(sib1, all_segs)
-                sibsib = collectIBDsegmentsSibsAvuncularCombine(sib1, sib2, all_segs)
-                IBD011 = findOverlap(sibseg, sibsib, 0, 1, 1, 0.5)
-                if len(sib2) > 1: #could be the case that we have one sib and his/her aunts/uncles
-                    sibseg2 = collectIBDsegments(sib2, all_segs)
-                    sibsib2 = collectIBDsegmentsSibsAvuncularCombine(sib2, sib1, all_segs)
-                    IBD011_2 = findOverlap(sibseg2, sibsib2, 0, 1, 1, 0.5)
-                    for chr in range(num_chrs):
-                        IBD011[chr] += IBD011_2[chr]
-                        IBD011[chr] = mergeIntervals(IBD011[chr])
-                IBD2 = getTotalLength(IBD011)
-
-            IBD2_add = IBD2
-            if proportion_par_exp != 0:
-                IBD2_add = IBD2_add / proportion_par_exp
-            elif proportion_gp_exp != 0:
-                IBD2_add = IBD2_add / proportion_gp_exp
-            if proportion_par_rel_exp != 0:
-                IBD2_add = IBD2_add / proportion_par_rel_exp
-            elif proportion_gp_rel_exp != 0:
-                IBD2_add = IBD2_add / proportion_gp_rel_exp
-
-            if IBD2_add != 0:
-                estimated_exp = getInferredFromK(K_exp + (IBD2_add) / total_genome / 2.0)  # add in IBD2, remove IBD1
-
-        result = []
-        if estimated_exp != 0:
-            if estimated_exp == -1:
-                estimated_exp = base
-            else:
-                estimated_exp = estimated_exp + base
-
-        #get all combinations of pairs for results
-        for sib_rel in sib2:
-            for sib in sib1:
-                # if rel_graph.has_edge(sib_rel,sib):
-                #     estimated_out_exp = rel_graph.get_edge_data(sib_rel,sib)['type']
-                # else:
-                estimated_out_exp = estimated_exp
-                refined = getPairwiseD(sib_rel, sib, all_rel)
-                to_add = [sib_rel, sib, estimated_out_exp, refined, 'combine1']
-                result.append(to_add)
-
-            for avunc in avunc1:
-                # if rel_graph.has_edge(sib_rel, avunc):
-                #     estimated_out_exp = rel_graph.get_edge_data(sib_rel,avunc)['type']
-                # else:
-                if estimated_exp != 0:
-                    estimated_out_exp = estimated_exp - 1
-                else:
-                    estimated_out_exp = 0
-                refined = getPairwiseD(sib_rel, avunc, all_rel)
-                to_add = [sib_rel, avunc, estimated_out_exp, refined, 'combine2']
-                result.append(to_add)
-
-            # for p1 in pc1:
-            #     if rel_graph.has_edge(sib_rel, p1):
-            #         estimated_out_exp = rel_graph.get_edge_data(sib_rel,p1)['type']
-            #     else:
-            #         if estimated_exp != 0:
-            #             estimated_out_exp = estimated_exp + 1
-            #         else:
-            #             estimated_out_exp = 0
-            #     refined = getPairwiseD(sib_rel, p1, all_rel)
-            #     to_add = [sib_rel, p1, estimated_out_exp, refined]
-            #     result.append(to_add)
-
-        for avunc_rel in avunc2:
-            for sib in sib1:
-                # if rel_graph.has_edge(avunc_rel, sib):
-                #     estimated_out_exp = rel_graph.get_edge_data(avunc_rel,sib)['type']
-                # else:
-                if estimated_exp != 0:
-                    estimated_out_exp = estimated_exp - 1
-                else:
-                    estimated_out_exp = 0
-                refined = getPairwiseD(sib, avunc_rel, all_rel)
-                to_add = [sib, avunc_rel, estimated_out_exp, refined, 'combine3']
-                result.append(to_add)
-
-            for avunc in avunc1:
-                # if rel_graph.has_edge(avunc_rel, avunc):
-                #     estimated_out_exp = rel_graph.get_edge_data(avunc_rel,avunc)['type']
-                # else:
-                if estimated_exp != 0:
-                    estimated_out_exp = estimated_exp - 2
-                else:
-                    estimated_out_exp = 0
-                refined = getPairwiseD(avunc, avunc_rel, all_rel)
-                to_add = [avunc, avunc_rel, estimated_out_exp, refined, 'combine4']
-                result.append(to_add)
-
-            # for p1 in pc1:
-            #     if rel_graph.has_edge(sib_rel, p1):
-            #         estimated_out_exp = rel_graph.get_edge_data(sib_rel,p1)['type']
-            #     else:
-            #         if estimated_exp != 0:
-            #             estimated_out_exp = estimated_exp + 1
-            #         else:
-            #             estimated_out_exp = 0
-            #     refined = getPairwiseD(avunc_rel, p1, all_rel)
-            #     to_add = [avunc_rel, p1, estimated_out_exp, refined]
-            #     result.append(to_add)
-
-        # for p1 in pc1:
-        #     for p2 in pc2:
-        #         if rel_graph.has_edge(p1, p2):
-        #             estimated_out_exp = rel_graph.get_edge_data(p1, p2)['type']
-        #         else:
-        #             if estimated_exp != 0:
-        #                 estimated_out_exp = estimated_exp + 2
-        #             else:
-        #                 estimated_out_exp = 0
-        #         refined = getPairwiseD(p1, p2, all_rel)
-        #         to_add = [p1, p2, estimated_out_exp, refined]
-        #         result.append(to_add)
+            estimated_out_exp = -1
+        for avunc in avunc1:
+            refined = getPairwiseD(avunc, avunc_rel, all_rel)
+            to_add = [avunc, avunc_rel, estimated_out_exp, refined, 'combine4']
+            result.append(to_add)
 
     return result
 
@@ -957,17 +901,21 @@ def checkRelevantAuntsUncles(sibset1, sibset2, avunc1_bothsides, avunc2_bothside
       avunc2 = avunc2.union(avset2)
 
 
-    for av1 in avunc1:
-        if av1 in avunc2 or av1 in par2:
-            return ['same',[], [], []] #same set of individuals
-        if av1 in sibset2:
-            return ['av',[], [], []] #sibset1's aunt/uncle is in sibset2 (sibset2 = aunts/uncles of sibset1)
-
-    for av2 in avunc2:
-        if av2 in par1:
-            return [[], 'same', [], []]
-        if av2 in sibset1:
-            return [[],'av', [], []]
+    if avunc1.intersection(avunc2) != set():
+        #sibset1's aunt/uncles are the same as sibset2's
+        return ['same', '']
+    if avunc1.intersection(par2) != set():
+        #sibset1's aunt/uncles contain sibset2's parent
+        return ['avsib', '']
+    if avunc1.intersection(sibset2) != set():
+        #sibset1's aunt/uncle is in sibset2 (sibset2 = aunts/uncles of sibset1)
+        return ['av', '']
+    if avunc2.intersection(par1) != set():
+        #sibset2's aunt/uncles contain sibset1's parent
+        return ['', 'avsib']
+    if avunc2.intersection(sibset1) != set():
+        #sibset2's aunt/uncle is in sibset1 (sibset1 = aunts/uncles of sibset2)
+        return ['av', '']
 
 
     minsib = 50 # impossible value will be updated
@@ -1234,9 +1182,9 @@ def checkSibs(sibs, rel, all_rel):
     for sib in sibs:
         all_pw.add( getPairwiseD(sib, rel, all_rel) )
     if len(all_pw) == 1:
-        return 1
+        return True
     else:
-        return 0
+        return False
 
 def checkAndRemove(x,setOrList):
     if x in setOrList:
@@ -1245,10 +1193,10 @@ def checkAndRemove(x,setOrList):
 def printResult(res, outfile):
     if res[2] == '1U':
         res[2] = '1'
-    elif res[2] in ['-1',-1]:
+    elif res[2] == 0:
         res[2] = 'MZ'
         res[3] = 'MZ'
-    elif res[2] == '0':
+    elif res[2] in ['-1',-1]:
         res[2] = 'UN'
         res[3] = 'UN'
     outfile.write("\t".join(map(str,res))+'\n')
@@ -1280,6 +1228,7 @@ def runDRUID(rel_graph, all_rel, inds, all_segs, args, outfile):
 
         reltype = getRelationship(rel_graph, ind1, ind2)
         if reltype != -1:   # path between the two:
+            checked.add(pair_name)
             refined = getPairwiseD(ind1, ind2, all_rel)
             printResult([ind1,ind2,reltype,refined, 'graph2'], outfile)
             continue
@@ -1296,10 +1245,11 @@ def runDRUID(rel_graph, all_rel, inds, all_segs, args, outfile):
 
         ind1_original = ind1
         ind1_new = checkForMoveUp(all_rel, ind1, sib1, par1.union(gp1), pc1, sib2)
-        # same as ind2: shouldn't happen
-        assert ind1_new != 'same', "ERROR: pair that is closely related not in same graph"
         moves1 = []
         moves_inds1 = []
+        moves2 = []
+        moves_inds2 = []
+
         while ind1 != ind1_new and ind1_new != 'same':
             moves1.append( getRelationship(rel_graph,ind1_new, ind1) )
             moves_inds1.append(ind1)
@@ -1308,15 +1258,15 @@ def runDRUID(rel_graph, all_rel, inds, all_segs, args, outfile):
             sib1.add(ind1)
             ind1_new = checkForMoveUp(all_rel, ind1, sib1, gp1.union(par1), pc1, sib2)
 
-        if ind1_new == 'same': # ind1_new in sib2
-            overlap = gp1.union(par1).intersection(sib2)
-            assert ind2 not in overlap, "ERROR: apparent path between individuals not in same graph"
-            if len(overlap):
-                ind1 = next(iter(overlap)) # any of the siblings will do
-            else:
+        if ind1_new == 'same':
+            # sib2 contains either a parent, grandparent, or pc (unknown direction) of ind1 in it
+            overlap = (gp1.union(par1)).intersection(sib2)
+            if not len(overlap):
                 overlap = pc1.intersection(sib2)
-                assert ind2 not in overlap, "ERROR: apparent path between individuals not in same graph"
-                ind1 = next(iter(overlap)) # any of the siblings will do
+            ind1_old = ind1
+            ind1 = next(iter(overlap)) # any of the intersecting samples will do
+            moves1.append( getRelationship(rel_graph,ind1, ind1_old) )
+            moves_inds1.append(ind1_old)
             [sib1, avunc1_bothsides, nn1, par1, child1, pc1, gp1, gc1, halfsib1_sets, twins1] = pullFamily(rel_graph, ind1)
 
         # STEP 2: move to parents/grandparents of ind2 that are more closely
@@ -1324,11 +1274,6 @@ def runDRUID(rel_graph, all_rel, inds, all_segs, args, outfile):
         else:
             ind2_original = ind2
             ind2_new = checkForMoveUp(all_rel, ind2,sib2,gp2.union(par2), pc2, sib1)
-            moves2 = []
-            moves_inds2 = []
-            if ind2_new == 'same':
-                moves2.append(getRelationship(rel_graph, ind2_new, ind2))
-                moves_inds2.append(ind2)
             while ind2 != ind2_new and ind2_new != 'same':
                 moves2.append(getRelationship(rel_graph, ind2_new, ind2))
                 moves_inds2.append(ind2)
@@ -1338,22 +1283,32 @@ def runDRUID(rel_graph, all_rel, inds, all_segs, args, outfile):
                 ind2_new = checkForMoveUp(all_rel, ind2, sib2, gp2.union(par2), pc2, sib1)
 
             if ind2_new == 'same':
-                overlap = gp2.union(par2).intersection(sib1)
-                assert ind1 not in overlap, "ERROR: apparent path between individuals not in same graph"
-                if len(overlap):
-                    ind2 = next(iter(overlap)) # any of the siblings will do
-                else:
+                # sib1 contains either a parent, grandparent, or pc (unknown direction) of ind2 in it
+                overlap = (gp2.union(par2)).intersection(sib1)
+                if not len(overlap):
                     overlap = pc2.intersection(sib1)
-                    assert ind1 not in overlap, "ERROR: apparent path between individuals not in same graph"
-                    ind2 = next(iter(overlap)) # any of the siblings will do
+                ind2_old = ind2
+                ind2 = next(iter(overlap)) # any of the intersecting samples will do
+                moves2.append( getRelationship(rel_graph,ind2, ind2_old) )
+                moves_inds2.append(ind2_old)
                 [sib2, avunc2_bothsides, nn2, par2, child2, pc2, gp2, gc2, halfsib2_sets, twins2] = pullFamily(rel_graph, ind2)
 
         # NOW DEAL WITH FIRST CASE: the moved-to ind1/ind2 are siblings.
         # Trivial case
 
         if ind1_new == 'same' or ind2_new == 'same':
-            assert ind1 != ind2, "ERROR: apparent path between individuals not in same graph"
-            closest_result = [ind1,ind2,1] # siblings
+            if ind1 == ind2:
+                closest_result = [ind1,ind2,0] # same person
+            else:
+                # TODO: what if ind1 and ind2 identical twins?
+                closest_result = [ind1,ind2,1] # siblings
+                # TODO: ideally want to do the closest_result inference for
+                #       all sibs (and twins) of ind1 and ind2
+                (refined, this_pair) = getPairD_w_Name(ind1, ind2, all_rel)
+                if not this_pair in checked:
+                    printResult([ind1, ind2, closest_result[2], refined, 'graph3'], outfile)
+                    checked.add(this_pair)
+
             total = int(closest_result[2])
 
         # DO MAIN DRUID INFERENCE using the current ind1 and ind2
@@ -1363,26 +1318,42 @@ def runDRUID(rel_graph, all_rel, inds, all_segs, args, outfile):
                 [relavunc1, relavunc2] = checkRelevantAuntsUncles(sib1, sib2, avunc1_bothsides, avunc2_bothsides, par1, par2, all_rel)
             # NO AUNT/UNCLE SETS
             else:
-                relavunc1 = []
-                relavunc2 = []
+                relavunc1 = set()
+                relavunc2 = set()
 
-            if relavunc1 != 'av' and relavunc2 != 'av':
+            results_tmp = []
+            graphCase = False
+            if relavunc1 == 'same': # note: no relavunc2 == 'same' case: symmetric
+                # same aunt/uncle sets: ind1 and ind2 are cousins
+                closest_result = [ind1, ind2, 3]
+                graphCase = True
+            elif relavunc1 == 'avsib' or relavunc2 == 'avsib':
+                # sibset1/2's aunt/uncle set contains sibset2/1's parent: ind1 and ind2 are cousins
+                closet_result = [ind1, ind2, 3]
+                graphCase = True
+            elif relavunc1 == 'av' or relavunc2 == 'av':
+                # sibset1/2's aunt/uncle is in sibset2/1 (sibset2/1 = aunts/uncles of sibset1/2)
+                closest_result = [ind1, ind2, 2] # aunt/uncle
+                graphCase = True
+            else:
                 # DO THE INFERENCE
                 results_tmp = combineBothGPsKeepProportionOnlyExpectation(sib1, relavunc1, pc1, sib2, relavunc2, pc2, all_rel, all_segs, args.i[0], rel_graph)
-            else:
-                # TODO: understand this case -- seems like it doesn't work
-                #       Perhaps we want
-                #closest_result = [ind1, ind2, 2] # aunt/uncle
-                # TODO: seems like this ought to be impossible
-                # sibset1's aunt/uncle is in sibset2 (sibset2 = aunts/uncles of sibset1)
-                results_tmp = []
-            for resu in results_tmp:
-                this_pair = getPairName(resu[0], resu[1])
+                for resu in results_tmp:
+                    this_pair = getPairName(resu[0], resu[1])
+                    if not this_pair in checked:
+                        resu.append('inferred3')
+                        # TODO: twins inference
+                        printResult(resu, outfile)
+                        checked.add(this_pair)
+
+            if graphCase:
+                # TODO: ideally want to do the closest_result inference for
+                #       all sibs (and twins) of ind1 and ind2
+                (refined, this_pair) = getPairD_w_Name(ind1, ind2, all_rel)
                 if not this_pair in checked:
-                    resu.append('inferred3')
-                    # TODO: twins
-                    printResult(resu, outfile)
+                    printResult([ind1, ind2, closest_result[2], refined, 'graph3'], outfile)
                     checked.add(this_pair)
+
             if ind1_original != ind1 or ind2_original != ind2:
                 for res in results_tmp:
                     if (res[0] == ind1 and res[1] == ind2) or (res[0] == ind2 and res[1] == ind1):
@@ -1392,6 +1363,8 @@ def runDRUID(rel_graph, all_rel, inds, all_segs, args, outfile):
                     closest_result[2] = 1
                 elif closest_result[2] == 'A':
                     closest_result[2] = 2
+                elif closest_result[2] == 'UN':
+                    closest_result[2] = -1
                 total = int(closest_result[2])
 
         # DONE INFERRING ind1, ind2's relationship
@@ -1400,13 +1373,11 @@ def runDRUID(rel_graph, all_rel, inds, all_segs, args, outfile):
         # ind1_original and ind2_original.
         # Is for cases where we've traveled through the graph.
         if ind1_original != ind1 or ind2_original != ind2:
-            # TODO: what if we haven't traveled through the graph? I suspect that code above
-            #       catches this
             for ii in range(len(moves1)-1,-1,-1):
                 #go through each move in moves1, add move length to total
                 #only add if total != 0 (i.e., there is a relationship)
-                if total > 0:
-                    if moves1[ii] in ['P','C','PC']:
+                if total >= 0:
+                    if moves1[ii] in {'P','C','PC'}:
                         total = total + 1
                     else: #gp or gc
                         total = total + 2
@@ -1437,7 +1408,7 @@ def runDRUID(rel_graph, all_rel, inds, all_segs, args, outfile):
                     if not p in moves_inds1:  # if we didn't/won't travel through this relationship
                         (refined, this_pair) = getPairD_w_Name(p, ind2, all_rel)
                         if not this_pair in checked:
-                            if total > 0:
+                            if total >= 0:
                                 printResult([p,ind2,total+1,refined,'graph+inferred4'], outfile)
                             else:
                                 printResult([p,ind2,total,refined,'graph+inferred5'], outfile)
@@ -1447,7 +1418,7 @@ def runDRUID(rel_graph, all_rel, inds, all_segs, args, outfile):
             [sib1, avunc1_bothsides, nn1, par1, child1, pc1, gp1, gc1, halfsib1_sets, twins1] = pullFamily(rel_graph, ind1) #get set of close relatives of ind1
             sib1.add(ind1)
             for ii in range(len(moves2)-1,-1,-1):
-                if total > 0:
+                if total >= 0:
                     if moves2[ii] in ['P','C','PC']:
                         total = total + 1
                     else: #gp or gc
@@ -1480,7 +1451,7 @@ def runDRUID(rel_graph, all_rel, inds, all_segs, args, outfile):
                         if not p in moves_inds2 and not p == ind2: #if we didn't/won't travel through this relationship
                             (refined, this_pair) = getPairD_w_Name(p, s1, all_rel)
                             if not this_pair in checked:
-                                if total > 0:
+                                if total >= 0:
                                     printResult([s1, p, total+1, refined, 'graph+inferred9'], outfile)
                                 else:
                                     printResult([s1, p, total, refined, 'graph+inferred9'], outfile)
@@ -1490,13 +1461,13 @@ def runDRUID(rel_graph, all_rel, inds, all_segs, args, outfile):
             if len(moves1) and len(moves2):
                 total = int(closest_result[2])
                 for i1 in range(len(moves1)-1,-1,-1):
-                    if total > 0:
+                    if total >= 0:
                         if moves1[i1] in ['P', 'C', 'PC']:
                             total = total + 1
                         else:
                             total = total + 2
                     for i2 in range(len(moves2)-1,-1,-1):
-                        if total > 0:
+                        if total >= 0:
                             if moves2[i2] in ['P', 'C', 'PC']:
                                 total = total + 1
                             else:

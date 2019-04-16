@@ -11,10 +11,10 @@ def checkChangeLineage(tmp_graph,path):
             type1 = tmp_graph.get_edge_data(indfirst, indsecond)['type']
             type2 = tmp_graph.get_edge_data(indsecond, indthird)['type']
             if (type1 == 'PC' and type2 =='PC') or (type1 == 'P' and type2 == 'PC') or (type1 == 'P' and type2 == 'C') or (type1 == 'GP' and type2 == 'GC') or (type1 == 'P' and type2 == 'GC') or (type1 == 'GP' and type2 == 'C') or (type1 == 'PC' and type2 == 'P') or (type1 == 'C' and type2 == 'P') or (type1 == 'GC' and type2 == 'GP') or (type1 == 'C' and type2 == 'GP') or (type1 == 'GC' and type2 == 'P') or (type1 == 'C' and type2 == 'AU') or (type1 == 'GC' and type2 == 'AU') or (type1 == 'P' and type2 == 'NN') or (type1 == 'GP' and type2 == 'NN'):
-                return 1
-        return 0
+                return True
+        return False
     else:
-        return 0
+        return False
 
 def getRelationship(tmp_graph,ind1,ind2):
     #if ind1 anad ind2 have a path between them, we find their degree of relatedness/relationship type
@@ -108,40 +108,32 @@ def getLargestSibsets(tmp_graph,all_inds):
 
 def checkIfSib(tmp_graph,ind1,ind2):
     #determine whether there's an edge labeled 'FS' between ind1 and ind2
-    type = tmp_graph.get_edge_data(ind1,ind2)['type']
-    if type == 'FS':
-        return 1
-    else:
-        return 0
+    return tmp_graph.get_edge_data(ind1,ind2)['type'] == 'FS'
 
 
 def checkIfParentInGraph(tmp_graph,ind1,ind2):
     #determine whether ind1 is the child of ind2
-    type = tmp_graph.get_edge_data(ind1,ind2)['type']
-    if type == 'C':
-        return 1
-    else:
-        return 0
+    return tmp_graph.get_edge_data(ind1,ind2)['type'] == 'C'
 
 
 def checkIfParent(tmp_graph, all_rel, sibset, ind, C):
     #determine if ind is the parent of sibset
     if len(sibset) == 1:
         if C: #DRUID_C
-            return 0
+            return False
         else:
             sib = list(sibset)[0]
             if getIBD2(sib, ind, all_rel) < 0.05: #very little IBD2
-                return 1 #return 1 to give generic PC categorization to pair later
+                #return True to give generic PC categorization to pair later
+                return True
             else:
-                return 0
+                return False
     else:
-        par = 1
         for sib in sibset:
             if not (sib,ind) in tmp_graph.edges(sib) or not tmp_graph.get_edge_data(sib,ind)['type'] == '1U' or not float(getIBD2(sib, ind, all_rel)) < 1/2.0**(7/2.0):
-                return 0
+                return False
 
-    return par
+    return True
 
 
 def getSibsFromGraph(tmp_graph,ind):
@@ -290,9 +282,6 @@ def addEdgeType(ind1,ind2,type1,type2,rel_graph):
     rel_graph[ind2][ind1]['type'] = type2
 
 
-def anyIn(list1,list2):
-    return [x for x in list1 if x in list2]
-
 def mean(nums):
     return sum(nums)/len(nums)
 
@@ -341,7 +330,7 @@ def checkForMoveUp(all_rel, ind, sibset, older_gen, possible_par, third_party):
                 pcK = getPairwiseK(tp, pc, all_rel)
                 indK =  getPairwiseK(tp, ind, all_rel)
 
-                if pcD == 0 or (thresholdK(pcD) * pcK <= indK or pcK / (indK + 1e-6) >= 20):
+                if pcD < 0 or (thresholdK(pcD) * pcK <= indK or pcK / (indK + 1e-6) >= 20):
                     # Ensure that for each third party individual, pc's K is
                     # sufficiently larger than current individual's K.
                     # Because this person could be a child of ind, who is
@@ -368,16 +357,14 @@ def checkForMoveUp(all_rel, ind, sibset, older_gen, possible_par, third_party):
 
 def checkAuntUncleGPRelationships(tmp_graph,siblings,par):
     # ensure the siblings of 'par' are listed as aunts/uncles of 'siblings' (par = parent of siblings)
-    if par!= []:
-        for p in par:
-            [sibpar, avunc_bothsides, nn, parpar, childpar, pc, gppar, gcpar, halfsib_sets, twins] = pullFamily(tmp_graph, p)
+    for p in par:
+        [sibpar, avunc_bothsides, nn, parpar, childpar, pc, gppar, gcpar, halfsib_sets, twins] = pullFamily(tmp_graph, p)
+        for sib in siblings:
+            for sp in sibpar:
+                addEdgeType(sib,sp,'NN','AU',tmp_graph)
+        for pp in parpar:
             for sib in siblings:
-                for sp in sibpar:
-                    addEdgeType(sib,sp,'NN','AU',tmp_graph)
-            if parpar != []:
-                for sib in siblings:
-                    for pp in parpar:
-                        addEdgeType(sib,pp,'GC','GP',tmp_graph)
+                addEdgeType(sib,pp,'GC','GP',tmp_graph)
 
 
 def getAuntsUnclesFromGraph(tmp_graph,ind):

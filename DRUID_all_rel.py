@@ -55,9 +55,9 @@ def getPairwiseD(ind1, ind2, all_rel):
         i2 = ind1
 
     if not i1 in all_rel.keys():
-        return 0
+        return -1
     elif not i2 in all_rel[i1].keys():
-        return 0
+        return -1
     else:
         return all_rel[i1][i2][3]
 
@@ -73,9 +73,9 @@ def getPairD_w_Name(ind1, ind2, all_rel):
         i2 = ind1
 
     if not i1 in all_rel.keys():
-        return (0, pair_name)
+        return (-1, pair_name)
     elif not i2 in all_rel[i1].keys():
-        return (0, pair_name)
+        return (-1, pair_name)
     else:
         return (all_rel[i1][i2][3], pair_name)
 
